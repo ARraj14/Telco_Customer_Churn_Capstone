@@ -1,0 +1,4 @@
+InternetService,Customers,ActualChurners,TruePositives,FalseNegatives,Recall,AveragePredictedRisk
+DSL,484,97,80,17,0.8247,0.3434
+Fiber optic,613,252,245,7,0.9722,0.6027
+No,312,25,14,11,0.56,0.1487

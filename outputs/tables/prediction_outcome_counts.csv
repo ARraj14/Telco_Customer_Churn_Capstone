@@ -1,0 +1,5 @@
+PredictionType,Customers
+True Negative,574
+False Positive,461
+True Positive,339
+False Negative,35

@@ -1,0 +1,27 @@
+TELCO CUSTOMER SEGMENTATION SUMMARY
+=================================================================
+
+Customers analysed: 7043
+Selected K: 3
+Silhouette score: 0.3003
+Davies-Bouldin score: 1.2683
+Calinski-Harabasz score: 3345.74
+PCA 2D explained variance: 64.37%
+
+Cluster sizes:
+ Cluster  Customers  Percentage
+       0       1549       21.99
+       1       2303       32.70
+       2       3191       45.31
+
+Numerical profiles:
+ Cluster  Customers  AvgTenure  MedianTenure  AvgMonthlyCharges  AvgTotalCharges  AvgServices  ChurnRate  SeniorCitizenRate  AutomaticPaymentRate
+       0       1549      30.75          25.0              21.29           675.96         1.24       7.36               3.42                 43.45
+       1       2303      57.10          60.0              89.15          5086.73         5.58      14.63              19.58                 63.61
+       2       3191      15.31          12.0              68.26          1032.40         2.79      44.44              19.99                 29.08
+
+Dominant categories:
+ Cluster Contract_Dominant  Contract_Share InternetService_Dominant  InternetService_Share    PaymentMethod_Dominant  PaymentMethod_Share OnlineSecurity_Dominant  OnlineSecurity_Share TechSupport_Dominant  TechSupport_Share PaperlessBilling_Dominant  PaperlessBilling_Share
+       0          Two year           42.03                       No                  98.52              Mailed check                48.68     No internet service                 98.52  No internet service              98.52                        No                   71.21
+       1          Two year           42.55              Fiber optic                  60.66 Bank transfer (automatic)                32.31                     Yes                 57.19                  Yes              59.88                       Yes                   67.74
+       2    Month-to-month           87.78              Fiber optic                  53.24          Electronic check                50.27                      No                 78.63                   No              79.66                       Yes                   67.85

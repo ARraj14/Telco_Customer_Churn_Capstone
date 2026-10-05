@@ -1,0 +1,3 @@
+AutomaticPayment,Customers,Churned,ChurnRate,PaymentType
+0,3977,1379,34.67,Manual Payment
+1,3066,490,15.98,Automatic Payment

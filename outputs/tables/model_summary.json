@@ -1,0 +1,14 @@
+{
+    "dataset_rows": 7043,
+    "training_rows": 5634,
+    "testing_rows": 1409,
+    "training_churn_rate": 0.2653532126375577,
+    "testing_churn_rate": 0.2654364797728886,
+    "selected_model": "Random Forest",
+    "test_roc_auc": 0.8414128497248702,
+    "accuracy": 0.7508871540099361,
+    "balanced_accuracy": 0.7646916737709577,
+    "precision": 0.5201401050788091,
+    "recall": 0.7941176470588235,
+    "f1": 0.6285714285714286
+}

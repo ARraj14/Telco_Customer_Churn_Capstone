@@ -1,0 +1,31 @@
+TELCO CUSTOMER CHURN - FINAL RISK SCORING SUMMARY
+======================================================================
+
+Customers scored: 7043
+OOF ROC-AUC: 0.8450
+Retention threshold: 0.31
+
+OOF THRESHOLD PERFORMANCE
+Precision: 0.4236
+Recall: 0.9197
+F1: 0.5801
+F2: 0.7452
+
+RISK BAND SUMMARY
+                 RiskBand  Customers  ActualChurners  ActualChurnRate  AveragePredictedRisk  Percentage
+Below Retention Threshold       2985             150             5.03                 13.75       42.38
+                High Risk       2785            1470            52.78                 70.99       39.54
+      Retention Candidate       1273             249            19.56                 40.18       18.07
+
+RETENTION PRIORITY SUMMARY
+RetentionPriority  Customers  ActualChurners  ActualChurnRate  AveragePredictedRisk  Percentage
+         Critical       2293            1284            56.00                 73.34       32.56
+             High       1053             291            27.64                 49.66       14.95
+           Medium       1049             173            16.49                 34.36       14.89
+              Low       2648             121             4.57                 12.60       37.60
+
+SEGMENT RISK PROFILE
+                         Segment  Customers  ActualChurnRate  AveragePredictedRisk  RetentionCandidates  RetentionCandidateRate
+High-Risk Short-Tenure Customers       3191            44.44                 62.23                 2854                   89.44
+      High-Value Loyal Customers       2303            14.63                 29.45                  966                   41.95
+       Low-Cost Stable Customers       1549             7.36                 15.15                  238                   15.36

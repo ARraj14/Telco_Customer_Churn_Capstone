@@ -1,0 +1,4 @@
+Segment,PrimaryRisk,RecommendedAction,Priority
+Low-Cost Stable Customers,Low churn but relatively low service adoption,Preserve affordability and introduce careful cross-sell offers.,Low
+High-Value Loyal Customers,Loss of a customer would carry high revenue impact,"Loyalty rewards, premium support, service-quality monitoring and personalized offers.",Medium
+High-Risk Short-Tenure Customers,"High churn, short tenure, month-to-month contracts and lower automatic-payment adoption","Early retention outreach, onboarding support, contract incentives, automatic-payment offers and technical-support intervention.",High

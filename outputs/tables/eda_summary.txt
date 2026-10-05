@@ -1,0 +1,46 @@
+TELCO CUSTOMER CHURN - EDA SUMMARY
+=================================================================
+
+Customers analysed: 7043
+Overall churn rate: 26.54%
+
+Average profile by churn status:
+       Customers  AvgTenure  MedianTenure  AvgMonthlyCharges  MedianMonthlyCharges  AvgTotalCharges  AvgServices
+Churn                                                                                                           
+No          5174      37.57          38.0              61.27                 64.43          2549.91         3.45
+Yes         1869      17.98          10.0              74.44                 79.65          1531.80         3.13
+
+Highest-risk tenure group:
+0-12 months - 47.44%
+
+Highest-risk contract:
+Month-to-month - 42.71%
+
+Highest-risk internet service:
+Fiber optic - 41.89%
+
+Highest-risk payment method:
+Electronic check - 45.29%
+
+Correlations with churn:
+ContractValue        -0.397
+tenure               -0.352
+HasInternetService    0.228
+AutomaticPayment     -0.210
+TotalCharges         -0.198
+MonthlyCharges        0.193
+SeniorCitizen         0.151
+NumServices          -0.067
+
+Top high-risk customer segments:
+      Contract InternetService             PaymentMethod  Customers  Churned  ChurnRate
+Month-to-month     Fiber optic          Electronic check       1307      789      60.37
+Month-to-month     Fiber optic              Mailed check        201      102      50.75
+Month-to-month     Fiber optic Bank transfer (automatic)        327      149      45.57
+Month-to-month     Fiber optic   Credit card (automatic)        293      122      41.64
+Month-to-month             DSL          Electronic check        474      192      40.51
+Month-to-month             DSL              Mailed check        367      113      30.79
+Month-to-month             DSL   Credit card (automatic)        185       50      27.03
+      One year     Fiber optic          Electronic check        196       51      26.02
+Month-to-month              No              Mailed check        325       67      20.62
+Month-to-month              No Bank transfer (automatic)         65       13      20.00

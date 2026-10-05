@@ -1,0 +1,34 @@
+TELCO CHURN - THRESHOLD AND ERROR ANALYSIS
+=================================================================
+
+Selected F2 threshold: 0.31
+
+Default threshold metrics:
+ROC_AUC: 0.8414
+Accuracy: 0.7509
+BalancedAccuracy: 0.7647
+Precision: 0.5201
+Recall: 0.7941
+F1: 0.6286
+F2: 0.7184
+
+Optimized threshold metrics:
+ROC_AUC: 0.8414
+Accuracy: 0.6480
+BalancedAccuracy: 0.7305
+Precision: 0.4238
+Recall: 0.9064
+F1: 0.5775
+F2: 0.7382
+
+Optimized confusion matrix:
+                 Predicted No Churn  Predicted Churn
+Actual No Churn                 574              461
+Actual Churn                     35              339
+
+Prediction outcome counts:
+PredictionType  Customers
+ True Negative        574
+False Positive        461
+ True Positive        339
+False Negative         35

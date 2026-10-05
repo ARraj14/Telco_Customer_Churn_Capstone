@@ -1,0 +1,14 @@
+TELCO CUSTOMER CHURN CAPSTONE - FINAL VALIDATION
+======================================================================
+
+Cleaned dataset shape: (7043, 27)
+Missing values: 0
+Duplicate rows: 0
+Figures generated: 35
+Risk-register customers: 7043
+Overall churn: 26.54%
+Selected model: Random Forest
+Test ROC-AUC: 0.8414
+Highest-risk segment: High-Risk Short-Tenure Customers
+Highest-risk segment churn: 44.44%
+Required files: PASS

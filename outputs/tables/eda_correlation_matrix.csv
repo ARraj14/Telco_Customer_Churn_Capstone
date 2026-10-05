@@ -1,0 +1,10 @@
+,SeniorCitizen,tenure,MonthlyCharges,TotalCharges,ChurnValue,NumServices,HasInternetService,ContractValue,AutomaticPayment
+SeniorCitizen,1.0,0.017,0.22,0.103,0.151,0.096,0.183,-0.143,-0.034
+tenure,0.017,1.0,0.248,0.826,-0.352,0.524,0.039,0.672,0.397
+MonthlyCharges,0.22,0.248,1.0,0.651,0.193,0.802,0.764,-0.074,0.061
+TotalCharges,0.103,0.826,0.651,1.0,-0.198,0.796,0.375,0.447,0.307
+ChurnValue,0.151,-0.352,0.193,-0.198,1.0,-0.067,0.228,-0.397,-0.21
+NumServices,0.096,0.524,0.802,0.796,-0.067,1.0,0.546,0.281,0.213
+HasInternetService,0.183,0.039,0.764,0.375,0.228,0.546,1.0,-0.242,0.001
+ContractValue,-0.143,0.672,-0.074,0.447,-0.397,0.281,-0.242,1.0,0.33
+AutomaticPayment,-0.034,0.397,0.061,0.307,-0.21,0.213,0.001,0.33,1.0

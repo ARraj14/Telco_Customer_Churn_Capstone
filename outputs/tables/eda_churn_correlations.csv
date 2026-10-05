@@ -1,0 +1,9 @@
+,Correlation
+ContractValue,-0.397
+tenure,-0.352
+HasInternetService,0.228
+AutomaticPayment,-0.21
+TotalCharges,-0.198
+MonthlyCharges,0.193
+SeniorCitizen,0.151
+NumServices,-0.067

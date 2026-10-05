@@ -1,0 +1,21 @@
+TELCO CUSTOMER SEGMENT BUSINESS SUMMARY
+=================================================================
+
+Overall churn rate: 26.54%
+
+ Cluster                          Segment  Customers  AvgTenure  MedianTenure  AvgMonthlyCharges  AvgTotalCharges  AvgServices  ChurnRate  AutomaticPaymentRate  Percentage
+       0        Low-Cost Stable Customers       1549      30.75          25.0              21.29           675.96         1.24       7.36                 43.45       21.99
+       1       High-Value Loyal Customers       2303      57.10          60.0              89.15          5086.73         5.58      14.63                 63.61       32.70
+       2 High-Risk Short-Tenure Customers       3191      15.31          12.0              68.26          1032.40         2.79      44.44                 29.08       45.31
+
+SEGMENT RECOMMENDATIONS
+                         Segment                                                                             PrimaryRisk                                                                                                               RecommendedAction Priority
+       Low-Cost Stable Customers                                           Low churn but relatively low service adoption                                                                 Preserve affordability and introduce careful cross-sell offers.      Low
+      High-Value Loyal Customers                                      Loss of a customer would carry high revenue impact                                           Loyalty rewards, premium support, service-quality monitoring and personalized offers.   Medium
+High-Risk Short-Tenure Customers High churn, short tenure, month-to-month contracts and lower automatic-payment adoption Early retention outreach, onboarding support, contract incentives, automatic-payment offers and technical-support intervention.     High
+
+SEGMENT RISK COMPARISON
+ Cluster                          Segment  Customers  ChurnRate  OverallChurnRate  RelativeRiskVsOverall  RelativeRiskVsLowestSegment
+       0        Low-Cost Stable Customers       1549       7.36             26.54                   0.28                         1.00
+       1       High-Value Loyal Customers       2303      14.63             26.54                   0.55                         1.99
+       2 High-Risk Short-Tenure Customers       3191      44.44             26.54                   1.67                         6.04

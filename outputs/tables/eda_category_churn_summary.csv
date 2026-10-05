@@ -1,0 +1,21 @@
+Feature,Category,Customers,Churned,ChurnRate
+PaymentMethod,Electronic check,2365,1071,45.29
+Contract,Month-to-month,3875,1655,42.71
+InternetService,Fiber optic,3096,1297,41.89
+PaperlessBilling,Yes,4171,1400,33.57
+Partner,No,3641,1200,32.96
+Dependents,No,4933,1543,31.28
+gender,Female,3488,939,26.92
+PhoneService,Yes,6361,1699,26.71
+gender,Male,3555,930,26.16
+PhoneService,No,682,170,24.93
+Partner,Yes,3402,669,19.66
+PaymentMethod,Mailed check,1612,308,19.11
+InternetService,DSL,2421,459,18.96
+PaymentMethod,Bank transfer (automatic),1544,258,16.71
+PaperlessBilling,No,2872,469,16.33
+Dependents,Yes,2110,326,15.45
+PaymentMethod,Credit card (automatic),1522,232,15.24
+Contract,One year,1473,166,11.27
+InternetService,No,1526,113,7.4
+Contract,Two year,1695,48,2.83

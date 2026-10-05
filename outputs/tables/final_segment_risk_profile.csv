@@ -1,0 +1,4 @@
+Segment,Customers,ActualChurnRate,AveragePredictedRisk,RetentionCandidates,RetentionCandidateRate
+High-Risk Short-Tenure Customers,3191,44.44,62.23,2854,89.44
+High-Value Loyal Customers,2303,14.63,29.45,966,41.95
+Low-Cost Stable Customers,1549,7.36,15.15,238,15.36

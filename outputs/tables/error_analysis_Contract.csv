@@ -1,0 +1,4 @@
+Contract,Customers,ActualChurners,TruePositives,FalseNegatives,Recall,AveragePredictedRisk
+Month-to-month,773,329,313,16,0.9514,0.6076
+One year,300,36,23,13,0.6389,0.2363
+Two year,336,9,3,6,0.3333,0.1234

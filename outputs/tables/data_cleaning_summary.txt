@@ -1,0 +1,20 @@
+TELCO CUSTOMER CHURN - DATA CLEANING SUMMARY
+============================================================
+
+Original rows: 7043
+Original columns: 21
+Invalid TotalCharges detected: 11
+TotalCharges filled for tenure-zero customers: 11
+Remaining TotalCharges missing: 0
+Duplicate rows: 0
+Duplicate customer IDs: 0
+Final rows: 7043
+Final columns: 27
+
+Engineered features:
+- ChurnValue
+- TenureGroup
+- NumServices
+- HasInternetService
+- ContractValue
+- AutomaticPayment

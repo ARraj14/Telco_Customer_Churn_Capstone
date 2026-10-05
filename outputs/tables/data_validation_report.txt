@@ -1,0 +1,13 @@
+TELCO CUSTOMER CHURN - DATA VALIDATION
+============================================================
+
+Dataset shape: (7043, 21)
+Rows: 7043
+Columns: 21
+Duplicate rows: 0
+Duplicate customer IDs: 0
+Invalid/blank TotalCharges values: 11
+
+Churn distribution:
+No: 5174 (73.46%)
+Yes: 1869 (26.54%)

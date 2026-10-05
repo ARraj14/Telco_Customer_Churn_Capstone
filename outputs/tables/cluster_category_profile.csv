@@ -1,0 +1,4 @@
+Cluster,Contract_Dominant,Contract_Share,InternetService_Dominant,InternetService_Share,PaymentMethod_Dominant,PaymentMethod_Share,OnlineSecurity_Dominant,OnlineSecurity_Share,TechSupport_Dominant,TechSupport_Share,PaperlessBilling_Dominant,PaperlessBilling_Share
+0,Two year,42.03,No,98.52,Mailed check,48.68,No internet service,98.52,No internet service,98.52,No,71.21
+1,Two year,42.55,Fiber optic,60.66,Bank transfer (automatic),32.31,Yes,57.19,Yes,59.88,Yes,67.74
+2,Month-to-month,87.78,Fiber optic,53.24,Electronic check,50.27,No,78.63,No,79.66,Yes,67.85

@@ -1,0 +1,5 @@
+PaymentMethod,Customers,ActualChurners,TruePositives,FalseNegatives,Recall,AveragePredictedRisk
+Bank transfer (automatic),300,57,50,7,0.8772,0.2928
+Credit card (automatic),309,51,41,10,0.8039,0.2901
+Electronic check,474,206,198,8,0.9612,0.6173
+Mailed check,326,60,50,10,0.8333,0.3435
