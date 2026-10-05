@@ -1,0 +1,5 @@
+RetentionPriority,Customers,ActualChurners,ActualChurnRate,AveragePredictedRisk,Percentage
+Critical,299,202,67.56,64.09,21.22
+High,289,93,32.18,35.98,20.51
+Medium,275,51,18.55,20.52,19.52
+Low,546,28,5.13,4.68,38.75

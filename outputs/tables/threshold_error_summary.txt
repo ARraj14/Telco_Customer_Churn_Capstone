@@ -1,34 +1,50 @@
-TELCO CHURN - THRESHOLD AND ERROR ANALYSIS
-=================================================================
+TELCO CHURN - CALIBRATION, THRESHOLD AND ERROR ANALYSIS
+========================================================================
 
-Selected F2 threshold: 0.31
+PROBABILITY MODEL SELECTION
+Selected probability model: Sigmoid calibrated classifier
+Calibration selected: True
 
-Default threshold metrics:
-ROC_AUC: 0.8414
-Accuracy: 0.7509
-BalancedAccuracy: 0.7647
-Precision: 0.5201
-Recall: 0.7941
-F1: 0.6286
-F2: 0.7184
+TRAINING OOF CALIBRATION
+Raw ROC-AUC: 0.8458
+Raw Brier Score: 0.1652
+Raw Log Loss: 0.4905
+Calibrated ROC-AUC: 0.8458
+Calibrated Brier Score: 0.1352
+Calibrated Log Loss: 0.4166
 
-Optimized threshold metrics:
-ROC_AUC: 0.8414
-Accuracy: 0.6480
-BalancedAccuracy: 0.7305
-Precision: 0.4238
-Recall: 0.9064
-F1: 0.5775
-F2: 0.7382
+Selected F2 threshold: 0.16
 
-Optimized confusion matrix:
+FINAL HOLDOUT DEFAULT THRESHOLD METRICS
+ROC_AUC: 0.8407
+Brier_Score: 0.1387
+Log_Loss: 0.4217
+Accuracy: 0.8062
+BalancedAccuracy: 0.7264
+Precision: 0.6603
+Recall: 0.5561
+F1: 0.6038
+F2: 0.5743
+
+FINAL HOLDOUT OPTIMIZED THRESHOLD METRICS
+ROC_AUC: 0.8407
+Brier_Score: 0.1387
+Log_Loss: 0.4217
+Accuracy: 0.6749
+BalancedAccuracy: 0.7506
+Precision: 0.4452
+Recall: 0.9118
+F1: 0.5982
+F2: 0.7538
+
+OPTIMIZED CONFUSION MATRIX
                  Predicted No Churn  Predicted Churn
-Actual No Churn                 574              461
-Actual Churn                     35              339
+Actual No Churn                 610              425
+Actual Churn                     33              341
 
-Prediction outcome counts:
+PREDICTION OUTCOME COUNTS
 PredictionType  Customers
- True Negative        574
-False Positive        461
- True Positive        339
-False Negative         35
+ True Negative        610
+False Positive        425
+ True Positive        341
+False Negative         33

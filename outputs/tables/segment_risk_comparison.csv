@@ -1,4 +1,4 @@
-Cluster,Segment,Customers,ChurnRate,OverallChurnRate,RelativeRiskVsOverall,RelativeRiskVsLowestSegment
-0,Low-Cost Stable Customers,1549,7.36,26.54,0.28,1.0
-1,High-Value Loyal Customers,2303,14.63,26.54,0.55,1.99
-2,High-Risk Short-Tenure Customers,3191,44.44,26.54,1.67,6.04
+Cluster,Segment,Customers,ChurnRate,HoldoutOverallChurnRate,RelativeRiskVsHoldoutOverall,RelativeRiskVsLowestSegment
+0,Low-Cost Stable Customers,317,7.89,26.54,0.3,1.0
+1,High-Risk Short-Tenure Customers,669,43.95,26.54,1.66,5.57
+2,High-Spend Loyal Customers,423,13.0,26.54,0.49,1.65

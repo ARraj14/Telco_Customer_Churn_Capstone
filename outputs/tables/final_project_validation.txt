@@ -1,14 +1,64 @@
 TELCO CUSTOMER CHURN CAPSTONE - FINAL VALIDATION
-======================================================================
+============================================================================
 
+Final status: PASSED
+Validation checks passed: 26/26
+
+DATA VALIDATION
 Cleaned dataset shape: (7043, 27)
 Missing values: 0
 Duplicate rows: 0
-Figures generated: 35
-Risk-register customers: 7043
+Duplicate customer IDs: 0
 Overall churn: 26.54%
-Selected model: Random Forest
-Test ROC-AUC: 0.8414
-Highest-risk segment: High-Risk Short-Tenure Customers
-Highest-risk segment churn: 44.44%
-Required files: PASS
+
+MODEL VALIDATION
+Selected model: Logistic Regression
+Training CV ROC-AUC: 0.8464
+Independent holdout ROC-AUC: 0.8407
+Independent holdout Brier Score: 0.1387
+Independent holdout recall: 0.9118
+Validated retention threshold: 0.16
+
+SEGMENTATION VALIDATION
+Clusters: 3
+Mean stability ARI: 1.0000
+
+INDEPENDENT HOLDOUT PRIORITY RESULTS
+Critical: 67.56% churn
+High: 32.18% churn
+Medium: 18.55% churn
+Low: 5.13% churn
+
+PROJECT ARTIFACTS
+Figures generated: 36
+Risk-register customers: 7043
+Required files missing: 0
+New-customer inference: PASS
+
+INDIVIDUAL CHECKS
+PASS - All required project files exist
+PASS - At least 36 analytical figures generated
+PASS - Probability calibration figure exists
+PASS - Cleaned dataset contains 7,043 customers
+PASS - Cleaned dataset has no missing values
+PASS - Cleaned dataset has no duplicate rows
+PASS - Customer IDs are unique
+PASS - Model selection is training-CV based
+PASS - Selected model is Logistic Regression
+PASS - Calibration improves training OOF Brier Score
+PASS - Sigmoid calibration selected
+PASS - Retention threshold is approximately 0.16
+PASS - Exactly three clusters are present
+PASS - Cluster stability is high
+PASS - All three business segments exist
+PASS - Holdout segment risk ordering is valid
+PASS - Independent holdout ROC-AUC >= 0.80
+PASS - Independent holdout recall >= 0.90
+PASS - Risk bands show monotonic holdout churn separation
+PASS - Retention priorities show monotonic holdout churn separation
+PASS - Risk register contains all 7,043 customers
+PASS - Risk register has no missing probabilities
+PASS - All churn probabilities are between 0 and 1
+PASS - All serialized model artifacts load successfully
+PASS - Segmentation bundle contains inference components
+PASS - End-to-end new-customer inference works

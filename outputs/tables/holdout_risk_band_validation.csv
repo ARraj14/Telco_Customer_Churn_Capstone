@@ -1,0 +1,4 @@
+RiskBand,Customers,ActualChurners,ActualChurnRate,AveragePredictedRisk,Percentage
+Below Retention Threshold,643,33,5.13,5.25,45.64
+High Risk,315,208,66.03,63.69,22.36
+Retention Candidate,451,133,29.49,31.75,32.01

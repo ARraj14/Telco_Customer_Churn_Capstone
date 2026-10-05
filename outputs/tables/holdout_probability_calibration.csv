@@ -1,0 +1,2 @@
+ProbabilityModel,ROC_AUC,Brier_Score,Log_Loss,Mean_Predicted_Risk,Actual_Churn_Rate
+Sigmoid calibrated classifier,0.8407398796145599,0.13874557232439855,0.42171157255876707,0.26796284307754265,0.2654364797728886

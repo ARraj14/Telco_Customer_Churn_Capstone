@@ -1,0 +1,4 @@
+Cluster,Segment,Customers,HoldoutChurnRate,AvgTenure,AvgMonthlyCharges,TrainingChurnRate,ChurnRateDifference
+0,Low-Cost Stable Customers,317,7.89,32.18,21.2,7.22,0.67
+1,High-Risk Short-Tenure Customers,669,43.95,15.82,68.27,44.67,-0.72
+2,High-Spend Loyal Customers,423,13.0,57.18,89.63,14.95,-1.95

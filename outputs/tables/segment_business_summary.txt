@@ -1,21 +1,41 @@
 TELCO CUSTOMER SEGMENT BUSINESS SUMMARY
-=================================================================
+========================================================================
 
-Overall churn rate: 26.54%
+METHODOLOGY
+Business segment names were determined from training customer profiles only.
+The resulting mapping was frozen before holdout churn outcomes were evaluated.
 
+FROZEN SEGMENT MAPPING
+Cluster 0: Low-Cost Stable Customers
+Cluster 1: High-Risk Short-Tenure Customers
+Cluster 2: High-Spend Loyal Customers
+
+TRAINING SEGMENT PROFILE
  Cluster                          Segment  Customers  AvgTenure  MedianTenure  AvgMonthlyCharges  AvgTotalCharges  AvgServices  ChurnRate  AutomaticPaymentRate  Percentage
-       0        Low-Cost Stable Customers       1549      30.75          25.0              21.29           675.96         1.24       7.36                 43.45       21.99
-       1       High-Value Loyal Customers       2303      57.10          60.0              89.15          5086.73         5.58      14.63                 63.61       32.70
-       2 High-Risk Short-Tenure Customers       3191      15.31          12.0              68.26          1032.40         2.79      44.44                 29.08       45.31
+       0        Low-Cost Stable Customers       1232      30.38          25.0              21.31           668.33         1.24       7.22                 43.43       21.87
+       1 High-Risk Short-Tenure Customers       2516      15.12          11.0              68.26          1020.50         2.79      44.67                 28.74       44.66
+       2       High-Spend Loyal Customers       1886      57.03          60.0              88.98          5070.78         5.58      14.95                 63.57       33.48
+
+INDEPENDENT HOLDOUT SEGMENT PROFILE
+ Cluster                          Segment  Customers  AvgTenure  MedianTenure  AvgMonthlyCharges  AvgTotalCharges  AvgServices  ChurnRate  AutomaticPaymentRate  Percentage
+       0        Low-Cost Stable Customers        317      32.18          28.0              21.20           705.62         1.22       7.89                 43.53       22.50
+       1 High-Risk Short-Tenure Customers        669      15.82          12.0              68.27          1063.32         2.79      43.95                 30.04       47.48
+       2       High-Spend Loyal Customers        423      57.18          60.0              89.63          5122.17         5.61      13.00                 63.83       30.02
+
+TRAINING vs HOLDOUT VALIDATION
+ Cluster                          Segment  Customers  HoldoutChurnRate  AvgTenure  AvgMonthlyCharges  TrainingChurnRate  ChurnRateDifference
+       0        Low-Cost Stable Customers        317              7.89      32.18              21.20               7.22                 0.67
+       1 High-Risk Short-Tenure Customers        669             43.95      15.82              68.27              44.67                -0.72
+       2       High-Spend Loyal Customers        423             13.00      57.18              89.63              14.95                -1.95
+
+HOLDOUT RISK COMPARISON
+ Cluster                          Segment  Customers  ChurnRate  HoldoutOverallChurnRate  RelativeRiskVsHoldoutOverall  RelativeRiskVsLowestSegment
+       0        Low-Cost Stable Customers        317       7.89                    26.54                          0.30                         1.00
+       1 High-Risk Short-Tenure Customers        669      43.95                    26.54                          1.66                         5.57
+       2       High-Spend Loyal Customers        423      13.00                    26.54                          0.49                         1.65
 
 SEGMENT RECOMMENDATIONS
-                         Segment                                                                             PrimaryRisk                                                                                                               RecommendedAction Priority
-       Low-Cost Stable Customers                                           Low churn but relatively low service adoption                                                                 Preserve affordability and introduce careful cross-sell offers.      Low
-      High-Value Loyal Customers                                      Loss of a customer would carry high revenue impact                                           Loyalty rewards, premium support, service-quality monitoring and personalized offers.   Medium
-High-Risk Short-Tenure Customers High churn, short tenure, month-to-month contracts and lower automatic-payment adoption Early retention outreach, onboarding support, contract incentives, automatic-payment offers and technical-support intervention.     High
-
-SEGMENT RISK COMPARISON
- Cluster                          Segment  Customers  ChurnRate  OverallChurnRate  RelativeRiskVsOverall  RelativeRiskVsLowestSegment
-       0        Low-Cost Stable Customers       1549       7.36             26.54                   0.28                         1.00
-       1       High-Value Loyal Customers       2303      14.63             26.54                   0.55                         1.99
-       2 High-Risk Short-Tenure Customers       3191      44.44             26.54                   1.67                         6.04
+                         Segment                                                                                                PrimaryRisk                                                                                                                            RecommendedAction Priority
+       Low-Cost Stable Customers                                                 Low churn and low spending, with limited service adoption.                                                                    Preserve affordability and introduce careful, relevant cross-sell offers.      Low
+      High-Spend Loyal Customers Churn is relatively low, but losing these long-tenure high-spend customers would reduce recurring revenue.                                         Use loyalty rewards, priority support, service-quality monitoring and personalized retention offers.   Medium
+High-Risk Short-Tenure Customers        High churn, short tenure, strong month-to-month concentration and lower automatic-payment adoption. Use early retention outreach, improved onboarding, contract-upgrade incentives, automatic-payment offers and technical support intervention.     High

@@ -1,0 +1,4 @@
+Cluster,Customers,AvgTenure,MedianTenure,AvgMonthlyCharges,AvgTotalCharges,AvgServices,ChurnRate,SeniorCitizenRate,AutomaticPaymentRate
+0,317,32.18,28.0,21.2,705.62,1.22,7.89,3.47,43.53
+1,669,15.82,12.0,68.27,1063.32,2.79,43.95,19.73,30.04
+2,423,57.18,60.0,89.63,5122.17,5.61,13.0,18.68,63.83

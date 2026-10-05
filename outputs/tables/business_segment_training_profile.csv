@@ -1,0 +1,4 @@
+Cluster,Segment,Customers,AvgTenure,MedianTenure,AvgMonthlyCharges,AvgTotalCharges,AvgServices,ChurnRate,AutomaticPaymentRate,Percentage
+0,Low-Cost Stable Customers,1232,30.38,25.0,21.31,668.33,1.24,7.22,43.43,21.87
+1,High-Risk Short-Tenure Customers,2516,15.12,11.0,68.26,1020.5,2.79,44.67,28.74,44.66
+2,High-Spend Loyal Customers,1886,57.03,60.0,88.98,5070.78,5.58,14.95,63.57,33.48

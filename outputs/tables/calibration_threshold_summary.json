@@ -1,0 +1,16 @@
+{
+    "selected_probability_model": "Sigmoid calibrated classifier",
+    "calibration_selected": true,
+    "raw_training_oof_roc_auc": 0.845804934059816,
+    "raw_training_oof_brier": 0.16524417727823296,
+    "calibrated_training_oof_roc_auc": 0.8457874803747049,
+    "calibrated_training_oof_brier": 0.1351890750346202,
+    "selected_threshold": 0.16000000000000003,
+    "holdout_roc_auc": 0.8407398796145599,
+    "holdout_brier": 0.13874557232439855,
+    "holdout_log_loss": 0.42171157255876707,
+    "holdout_default_recall": 0.5561497326203209,
+    "holdout_optimized_recall": 0.9117647058823529,
+    "holdout_optimized_precision": 0.4451697127937337,
+    "holdout_optimized_f2": 0.7537577365163572
+}

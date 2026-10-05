@@ -1,5 +1,7 @@
 from pathlib import Path
+import json
 
+import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -14,6 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = PROJECT_ROOT / "data" / "telco_churn_segmented.csv"
 
 OUTPUT_DATA_PATH = PROJECT_ROOT / "data" / "telco_churn_segmented_labeled.csv"
+
+SEGMENTATION_MODEL_PATH = (
+    PROJECT_ROOT / "models" / "customer_segmentation_pipeline.joblib"
+)
 
 TABLES_DIR = PROJECT_ROOT / "outputs" / "tables"
 
@@ -36,22 +42,191 @@ FIGURES_DIR.mkdir(
 
 df = pd.read_csv(DATA_PATH)
 
-print("=" * 78)
-print("TELCO CHURN - CUSTOMER SEGMENT BUSINESS ANALYSIS")
-print("=" * 78)
+segmentation_bundle = joblib.load(SEGMENTATION_MODEL_PATH)
+
+
+print("=" * 80)
+print("TELCO CHURN - LEAKAGE-SAFE SEGMENT BUSINESS ANALYSIS")
+print("=" * 80)
+
+
+print("\nDataset shape:")
+print(df.shape)
 
 
 # =========================================================
-# SEGMENT LABELS
+# VALIDATE SPLIT INFORMATION
 # =========================================================
+
+if "ModelSplit" not in df.columns:
+    raise ValueError(
+        "ModelSplit column is missing. Run src/06_customer_segmentation.py first."
+    )
+
+
+training_df = df[df["ModelSplit"] == "Training"].copy()
+
+
+holdout_df = df[df["ModelSplit"] == "Holdout"].copy()
+
+
+print("\nTraining customers:")
+print(len(training_df))
+
+print("\nHoldout customers:")
+print(len(holdout_df))
+
+
+# =========================================================
+# PROFILE FUNCTION
+# =========================================================
+
+
+def create_segment_profile(
+    data,
+):
+
+    profile = (
+        data.groupby(
+            "Cluster",
+            observed=True,
+        )
+        .agg(
+            Customers=(
+                "customerID",
+                "count",
+            ),
+            AvgTenure=(
+                "tenure",
+                "mean",
+            ),
+            MedianTenure=(
+                "tenure",
+                "median",
+            ),
+            AvgMonthlyCharges=(
+                "MonthlyCharges",
+                "mean",
+            ),
+            AvgTotalCharges=(
+                "TotalCharges",
+                "mean",
+            ),
+            AvgServices=(
+                "NumServices",
+                "mean",
+            ),
+            ChurnRate=(
+                "ChurnValue",
+                "mean",
+            ),
+            AutomaticPaymentRate=(
+                "AutomaticPayment",
+                "mean",
+            ),
+            SeniorCitizenRate=(
+                "SeniorCitizen",
+                "mean",
+            ),
+        )
+        .reset_index()
+    )
+
+    profile["ChurnRate"] *= 100
+
+    profile["AutomaticPaymentRate"] *= 100
+
+    profile["SeniorCitizenRate"] *= 100
+
+    return profile.round(2)
+
+
+# =========================================================
+# TRAINING PROFILE
+# =========================================================
+#
+# CRITICAL:
+# Business segment names are derived using TRAINING DATA
+# ONLY.
+#
+# Holdout churn is not used to determine segment names.
+# =========================================================
+
+training_profile = create_segment_profile(training_df)
+
+
+print("\nTraining cluster profile:")
+print(training_profile)
+
+
+# =========================================================
+# TRAINING-DEFINED SEGMENT NAMING
+# =========================================================
+#
+# Naming logic:
+#
+# 1. Lowest average monthly charges
+#       -> Low-Cost Stable Customers
+#
+# 2. Highest training churn rate among remaining clusters
+#       -> High-Risk Short-Tenure Customers
+#
+# 3. Remaining / highest-spend behavioral cluster
+#       -> High-Spend Loyal Customers
+#
+# The labels are frozen BEFORE looking at holdout outcomes.
+# =========================================================
+
+low_cost_cluster = int(
+    training_profile.sort_values("AvgMonthlyCharges").iloc[0]["Cluster"]
+)
+
+
+remaining_after_low_cost = training_profile[
+    training_profile["Cluster"] != low_cost_cluster
+]
+
+
+high_risk_cluster = int(
+    remaining_after_low_cost.sort_values(
+        "ChurnRate",
+        ascending=False,
+    ).iloc[0]["Cluster"]
+)
+
+
+remaining_clusters = [
+    int(cluster)
+    for cluster in training_profile["Cluster"].tolist()
+    if int(cluster)
+    not in [
+        low_cost_cluster,
+        high_risk_cluster,
+    ]
+]
+
+
+if len(remaining_clusters) != 1:
+    raise ValueError("Expected exactly three clusters for business-segment naming.")
+
+
+high_spend_cluster = remaining_clusters[0]
+
 
 segment_names = {
-    0: "Low-Cost Stable Customers",
-    1: "High-Value Loyal Customers",
-    2: "High-Risk Short-Tenure Customers",
+    low_cost_cluster: "Low-Cost Stable Customers",
+    high_risk_cluster: "High-Risk Short-Tenure Customers",
+    high_spend_cluster: "High-Spend Loyal Customers",
 }
 
-df["Segment"] = df["Cluster"].map(segment_names)
+
+print("\nTraining-defined segment mapping:")
+
+for (
+    cluster,
+    segment,
+) in segment_names.items():
+    print(f"Cluster {cluster}: {segment}")
 
 
 # =========================================================
@@ -59,184 +234,356 @@ df["Segment"] = df["Cluster"].map(segment_names)
 # =========================================================
 
 segment_strategy = {
-    0: (
-        "Maintain affordable service and explore gentle "
-        "cross-sell opportunities without increasing price sensitivity."
+    "Low-Cost Stable Customers": (
+        "Maintain affordable service and use careful "
+        "cross-sell offers that do not increase "
+        "price sensitivity."
     ),
-    1: (
-        "Protect these high-value customers through loyalty rewards, "
-        "priority support, service-quality monitoring, and personalized offers."
+    "High-Spend Loyal Customers": (
+        "Protect long-tenure, high-spend customers "
+        "through loyalty rewards, priority support, "
+        "service-quality monitoring and personalized "
+        "offers."
     ),
-    2: (
-        "Prioritize proactive retention, early-tenure onboarding, "
-        "contract-upgrade incentives, automatic-payment adoption, "
-        "technical-support offers, and fiber-service quality monitoring."
+    "High-Risk Short-Tenure Customers": (
+        "Prioritize early retention outreach, "
+        "onboarding support, contract incentives, "
+        "automatic-payment adoption, technical-support "
+        "offers and fiber-service quality monitoring."
     ),
 }
 
-df["RetentionStrategy"] = df["Cluster"].map(segment_strategy)
+
+# =========================================================
+# APPLY FROZEN LABELS
+# =========================================================
+
+df["Segment"] = df["Cluster"].map(segment_names)
+
+
+if df["Segment"].isna().any():
+    raise ValueError(
+        "One or more clusters could not be mapped to business segment names."
+    )
+
+
+df["RetentionStrategy"] = df["Segment"].map(segment_strategy)
+
+
+training_df = df[df["ModelSplit"] == "Training"].copy()
+
+
+holdout_df = df[df["ModelSplit"] == "Holdout"].copy()
 
 
 # =========================================================
-# SEGMENT PROFILE
+# NAMED PROFILE FUNCTION
 # =========================================================
 
-segment_profile = (
-    df.groupby(
-        [
-            "Cluster",
-            "Segment",
-        ],
-        observed=True,
+
+def create_named_profile(
+    data,
+):
+
+    profile = (
+        data.groupby(
+            [
+                "Cluster",
+                "Segment",
+            ],
+            observed=True,
+        )
+        .agg(
+            Customers=(
+                "customerID",
+                "count",
+            ),
+            AvgTenure=(
+                "tenure",
+                "mean",
+            ),
+            MedianTenure=(
+                "tenure",
+                "median",
+            ),
+            AvgMonthlyCharges=(
+                "MonthlyCharges",
+                "mean",
+            ),
+            AvgTotalCharges=(
+                "TotalCharges",
+                "mean",
+            ),
+            AvgServices=(
+                "NumServices",
+                "mean",
+            ),
+            ChurnRate=(
+                "ChurnValue",
+                "mean",
+            ),
+            AutomaticPaymentRate=(
+                "AutomaticPayment",
+                "mean",
+            ),
+        )
+        .reset_index()
     )
-    .agg(
-        Customers=(
-            "customerID",
-            "count",
-        ),
-        AvgTenure=(
-            "tenure",
-            "mean",
-        ),
-        MedianTenure=(
-            "tenure",
-            "median",
-        ),
-        AvgMonthlyCharges=(
-            "MonthlyCharges",
-            "mean",
-        ),
-        AvgTotalCharges=(
-            "TotalCharges",
-            "mean",
-        ),
-        AvgServices=(
-            "NumServices",
-            "mean",
-        ),
-        ChurnRate=(
-            "ChurnValue",
-            "mean",
-        ),
-        AutomaticPaymentRate=(
-            "AutomaticPayment",
-            "mean",
-        ),
-    )
-    .reset_index()
+
+    profile["Percentage"] = profile["Customers"] / len(data) * 100
+
+    profile["ChurnRate"] *= 100
+
+    profile["AutomaticPaymentRate"] *= 100
+
+    return profile.round(2)
+
+
+# =========================================================
+# TRAINING / HOLDOUT / FULL PROFILES
+# =========================================================
+
+training_named_profile = create_named_profile(training_df)
+
+
+holdout_named_profile = create_named_profile(holdout_df)
+
+
+full_named_profile = create_named_profile(df)
+
+
+print("\nTraining-defined segment profile:")
+
+print(training_named_profile)
+
+
+print("\nIndependent holdout segment profile:")
+
+print(holdout_named_profile)
+
+
+print("\nFull descriptive segment profile:")
+
+print(full_named_profile)
+
+
+training_named_profile.to_csv(
+    TABLES_DIR / "business_segment_training_profile.csv",
+    index=False,
 )
 
 
-segment_profile["Percentage"] = segment_profile["Customers"] / len(df) * 100
+holdout_named_profile.to_csv(
+    TABLES_DIR / "business_segment_holdout_profile.csv",
+    index=False,
+)
 
 
-segment_profile["ChurnRate"] *= 100
-
-segment_profile["AutomaticPaymentRate"] *= 100
-
-
-segment_profile = segment_profile.round(2)
-
-
-print("\nSegment profile:")
-print(segment_profile)
-
-segment_profile.to_csv(
+full_named_profile.to_csv(
     TABLES_DIR / "business_segment_profile.csv",
     index=False,
 )
 
 
 # =========================================================
-# CONTRACT DISTRIBUTION
+# HOLDOUT VALIDATION
+# =========================================================
+
+training_churn_lookup = training_named_profile.set_index("Segment")["ChurnRate"]
+
+
+holdout_validation = holdout_named_profile[
+    [
+        "Cluster",
+        "Segment",
+        "Customers",
+        "ChurnRate",
+        "AvgTenure",
+        "AvgMonthlyCharges",
+    ]
+].copy()
+
+
+holdout_validation["TrainingChurnRate"] = holdout_validation["Segment"].map(
+    training_churn_lookup
+)
+
+
+holdout_validation["ChurnRateDifference"] = (
+    holdout_validation["ChurnRate"] - holdout_validation["TrainingChurnRate"]
+)
+
+
+holdout_validation = holdout_validation.rename(
+    columns={"ChurnRate": "HoldoutChurnRate"}
+)
+
+
+holdout_validation["ChurnRateDifference"] = holdout_validation[
+    "ChurnRateDifference"
+].round(2)
+
+
+print("\nTraining vs holdout segment validation:")
+
+print(holdout_validation)
+
+
+holdout_validation.to_csv(
+    TABLES_DIR / "business_segment_holdout_validation.csv",
+    index=False,
+)
+
+
+# =========================================================
+# HOLDOUT RISK COMPARISON
+# =========================================================
+
+holdout_overall_churn = holdout_df["ChurnValue"].mean() * 100
+
+
+holdout_risk_comparison = holdout_named_profile[
+    [
+        "Cluster",
+        "Segment",
+        "Customers",
+        "ChurnRate",
+    ]
+].copy()
+
+
+holdout_risk_comparison["HoldoutOverallChurnRate"] = round(
+    holdout_overall_churn,
+    2,
+)
+
+
+holdout_risk_comparison["RelativeRiskVsHoldoutOverall"] = (
+    holdout_risk_comparison["ChurnRate"] / holdout_overall_churn
+).round(2)
+
+
+lowest_holdout_rate = holdout_risk_comparison["ChurnRate"].min()
+
+
+holdout_risk_comparison["RelativeRiskVsLowestSegment"] = (
+    holdout_risk_comparison["ChurnRate"] / lowest_holdout_rate
+).round(2)
+
+
+print("\nIndependent holdout segment risk comparison:")
+
+print(holdout_risk_comparison)
+
+
+holdout_risk_comparison.to_csv(
+    TABLES_DIR / "segment_risk_comparison.csv",
+    index=False,
+)
+
+
+# =========================================================
+# CATEGORY DISTRIBUTIONS
+# TRAINING-DEFINED DESCRIPTIVE PROFILE
 # =========================================================
 
 contract_distribution = (
     pd.crosstab(
-        df["Segment"],
-        df["Contract"],
+        training_df["Segment"],
+        training_df["Contract"],
         normalize="index",
     )
     * 100
 ).round(2)
 
-print("\nContract distribution (%):")
-print(contract_distribution)
+
+internet_distribution = (
+    pd.crosstab(
+        training_df["Segment"],
+        training_df["InternetService"],
+        normalize="index",
+    )
+    * 100
+).round(2)
+
+
+payment_distribution = (
+    pd.crosstab(
+        training_df["Segment"],
+        training_df["PaymentMethod"],
+        normalize="index",
+    )
+    * 100
+).round(2)
+
 
 contract_distribution.to_csv(TABLES_DIR / "business_segment_contract_distribution.csv")
 
 
-# =========================================================
-# INTERNET DISTRIBUTION
-# =========================================================
-
-internet_distribution = (
-    pd.crosstab(
-        df["Segment"],
-        df["InternetService"],
-        normalize="index",
-    )
-    * 100
-).round(2)
-
-print("\nInternet service distribution (%):")
-print(internet_distribution)
-
 internet_distribution.to_csv(TABLES_DIR / "business_segment_internet_distribution.csv")
 
-
-# =========================================================
-# PAYMENT DISTRIBUTION
-# =========================================================
-
-payment_distribution = (
-    pd.crosstab(
-        df["Segment"],
-        df["PaymentMethod"],
-        normalize="index",
-    )
-    * 100
-).round(2)
-
-print("\nPayment distribution (%):")
-print(payment_distribution)
 
 payment_distribution.to_csv(TABLES_DIR / "business_segment_payment_distribution.csv")
 
 
+print("\nTraining contract distribution (%):")
+
+print(contract_distribution)
+
+
+print("\nTraining internet distribution (%):")
+
+print(internet_distribution)
+
+
+print("\nTraining payment distribution (%):")
+
+print(payment_distribution)
+
+
 # =========================================================
-# SEGMENT RECOMMENDATION TABLE
+# SEGMENT RECOMMENDATIONS
 # =========================================================
 
 recommendations = pd.DataFrame(
     [
         {
             "Segment": "Low-Cost Stable Customers",
-            "PrimaryRisk": "Low churn but relatively low service adoption",
+            "PrimaryRisk": (
+                "Low churn and low spending, with limited service adoption."
+            ),
             "RecommendedAction": (
-                "Preserve affordability and introduce careful cross-sell offers."
+                "Preserve affordability and introduce "
+                "careful, relevant cross-sell offers."
             ),
             "Priority": "Low",
         },
         {
-            "Segment": "High-Value Loyal Customers",
-            "PrimaryRisk": ("Loss of a customer would carry high revenue impact"),
+            "Segment": "High-Spend Loyal Customers",
+            "PrimaryRisk": (
+                "Churn is relatively low, but losing "
+                "these long-tenure high-spend customers "
+                "would reduce recurring revenue."
+            ),
             "RecommendedAction": (
-                "Loyalty rewards, premium support, "
-                "service-quality monitoring and personalized offers."
+                "Use loyalty rewards, priority support, "
+                "service-quality monitoring and "
+                "personalized retention offers."
             ),
             "Priority": "Medium",
         },
         {
             "Segment": "High-Risk Short-Tenure Customers",
             "PrimaryRisk": (
-                "High churn, short tenure, month-to-month "
-                "contracts and lower automatic-payment adoption"
+                "High churn, short tenure, strong "
+                "month-to-month concentration and lower "
+                "automatic-payment adoption."
             ),
             "RecommendedAction": (
-                "Early retention outreach, onboarding support, "
-                "contract incentives, automatic-payment offers "
-                "and technical-support intervention."
+                "Use early retention outreach, improved "
+                "onboarding, contract-upgrade incentives, "
+                "automatic-payment offers and technical "
+                "support intervention."
             ),
             "Priority": "High",
         },
@@ -251,24 +598,28 @@ recommendations.to_csv(
 
 
 # =========================================================
-# FIGURE 29 - SEGMENT SIZE
+# FIGURE 29
+# FULL CUSTOMER POPULATION BY FROZEN SEGMENT
 # =========================================================
 
-segment_order = segment_profile.sort_values(
+segment_order = full_named_profile.sort_values(
     "Customers",
     ascending=False,
 )["Segment"].tolist()
 
+
 plt.figure(figsize=(11, 6))
 
+
 ax = sns.barplot(
-    data=segment_profile,
+    data=full_named_profile,
     x="Segment",
     y="Customers",
     order=segment_order,
 )
 
-plt.title("Customer Population by Business Segment")
+
+plt.title("Customer Population by Training-Defined Business Segment")
 
 plt.xlabel("Customer Segment")
 
@@ -279,8 +630,10 @@ plt.xticks(
     ha="right",
 )
 
+
 for container in ax.containers:
     ax.bar_label(container)
+
 
 plt.tight_layout()
 
@@ -294,39 +647,54 @@ plt.close()
 
 
 # =========================================================
-# FIGURE 30 - CHURN RATE BY NAMED SEGMENT
+# FIGURE 30
+# INDEPENDENT HOLDOUT CHURN BY SEGMENT
 # =========================================================
 
-risk_order = segment_profile.sort_values(
+risk_order = holdout_named_profile.sort_values(
     "ChurnRate",
     ascending=False,
 )["Segment"].tolist()
 
+
 plt.figure(figsize=(11, 6))
 
+
 ax = sns.barplot(
-    data=segment_profile,
+    data=holdout_named_profile,
     x="Segment",
     y="ChurnRate",
     order=risk_order,
 )
 
-plt.title("Observed Churn Rate by Customer Segment")
+
+plt.axhline(
+    holdout_overall_churn,
+    linestyle="--",
+    label=(f"Holdout overall churn ({holdout_overall_churn:.2f}%)"),
+)
+
+
+plt.title("Independent Holdout Churn Rate by Training-Defined Segment")
 
 plt.xlabel("Customer Segment")
 
-plt.ylabel("Churn Rate (%)")
+plt.ylabel("Holdout Churn Rate (%)")
 
 plt.xticks(
     rotation=20,
     ha="right",
 )
 
+
 for container in ax.containers:
     ax.bar_label(
         container,
         fmt="%.1f",
     )
+
+
+plt.legend()
 
 plt.tight_layout()
 
@@ -340,37 +708,63 @@ plt.close()
 
 
 # =========================================================
-# FIGURE 31 - CUSTOMER VALUE / RISK MAP
+# FIGURE 31
+# TRAINING PROFILE vs HOLDOUT RISK
 # =========================================================
+
+training_spend_lookup = training_named_profile.set_index("Segment")["AvgMonthlyCharges"]
+
+
+validation_map = holdout_named_profile[
+    [
+        "Segment",
+        "Customers",
+        "ChurnRate",
+    ]
+].copy()
+
+
+validation_map["TrainingAvgMonthlyCharges"] = validation_map["Segment"].map(
+    training_spend_lookup
+)
+
 
 plt.figure(figsize=(10, 7))
 
+
 sns.scatterplot(
-    data=segment_profile,
-    x="AvgMonthlyCharges",
+    data=validation_map,
+    x="TrainingAvgMonthlyCharges",
     y="ChurnRate",
     size="Customers",
     hue="Segment",
-    sizes=(300, 1000),
+    sizes=(
+        300,
+        1000,
+    ),
 )
 
-for _, row in segment_profile.iterrows():
+
+for _, row in validation_map.iterrows():
     plt.annotate(
         row["Segment"],
         (
-            row["AvgMonthlyCharges"],
+            row["TrainingAvgMonthlyCharges"],
             row["ChurnRate"],
         ),
-        xytext=(6, 6),
+        xytext=(
+            6,
+            6,
+        ),
         textcoords="offset points",
     )
 
 
-plt.title("Customer Segment Value-Risk Map")
+plt.title("Training-Defined Spend Profile vs Holdout Churn Risk")
 
-plt.xlabel("Average Monthly Charges")
+plt.xlabel("Training Average Monthly Charges")
 
-plt.ylabel("Observed Churn Rate (%)")
+plt.ylabel("Independent Holdout Churn Rate (%)")
 
 plt.tight_layout()
 
@@ -384,44 +778,55 @@ plt.close()
 
 
 # =========================================================
-# SEGMENT RISK MULTIPLIERS
+# UPDATE SEGMENTATION MODEL BUNDLE
+# =========================================================
+#
+# Adds the frozen business mapping and strategies so
+# brand-new customers can later receive a segment name.
 # =========================================================
 
-overall_churn_rate = df["ChurnValue"].mean() * 100
+segmentation_bundle["segment_names"] = segment_names
 
-risk_comparison = segment_profile[
-    [
-        "Cluster",
-        "Segment",
-        "Customers",
-        "ChurnRate",
-    ]
-].copy()
 
-risk_comparison["OverallChurnRate"] = round(
-    overall_churn_rate,
-    2,
+segmentation_bundle["segment_strategy"] = segment_strategy
+
+
+segmentation_bundle["segment_naming_method"] = (
+    "Business segment labels were derived using training "
+    "customer profiles only and then frozen before "
+    "independent holdout evaluation."
 )
 
-risk_comparison["RelativeRiskVsOverall"] = (
-    risk_comparison["ChurnRate"] / overall_churn_rate
-).round(2)
 
-
-lowest_segment_rate = risk_comparison["ChurnRate"].min()
-
-risk_comparison["RelativeRiskVsLowestSegment"] = (
-    risk_comparison["ChurnRate"] / lowest_segment_rate
-).round(2)
-
-
-print("\nSegment churn-risk comparison:")
-print(risk_comparison)
-
-risk_comparison.to_csv(
-    TABLES_DIR / "segment_risk_comparison.csv",
-    index=False,
+joblib.dump(
+    segmentation_bundle,
+    SEGMENTATION_MODEL_PATH,
 )
+
+
+# =========================================================
+# SAVE MAPPING JSON
+# =========================================================
+
+mapping_json = {
+    str(cluster): segment
+    for (
+        cluster,
+        segment,
+    ) in segment_names.items()
+}
+
+
+with open(
+    TABLES_DIR / "segment_mapping.json",
+    "w",
+    encoding="utf-8",
+) as file:
+    json.dump(
+        mapping_json,
+        file,
+        indent=4,
+    )
 
 
 # =========================================================
@@ -448,34 +853,81 @@ with open(
 ) as file:
     file.write("TELCO CUSTOMER SEGMENT BUSINESS SUMMARY\n")
 
-    file.write("=" * 65 + "\n\n")
+    file.write("=" * 72 + "\n\n")
 
-    file.write(f"Overall churn rate: {overall_churn_rate:.2f}%\n\n")
+    file.write("METHODOLOGY\n")
 
-    file.write(segment_profile.to_string(index=False))
+    file.write(
+        "Business segment names were determined from training customer profiles only.\n"
+    )
+
+    file.write(
+        "The resulting mapping was frozen before holdout "
+        "churn outcomes were evaluated.\n\n"
+    )
+
+    file.write("FROZEN SEGMENT MAPPING\n")
+
+    for (
+        cluster,
+        segment,
+    ) in segment_names.items():
+        file.write(f"Cluster {cluster}: {segment}\n")
+
+    file.write("\nTRAINING SEGMENT PROFILE\n")
+
+    file.write(training_named_profile.to_string(index=False))
+
+    file.write("\n\nINDEPENDENT HOLDOUT SEGMENT PROFILE\n")
+
+    file.write(holdout_named_profile.to_string(index=False))
+
+    file.write("\n\nTRAINING vs HOLDOUT VALIDATION\n")
+
+    file.write(holdout_validation.to_string(index=False))
+
+    file.write("\n\nHOLDOUT RISK COMPARISON\n")
+
+    file.write(holdout_risk_comparison.to_string(index=False))
 
     file.write("\n\nSEGMENT RECOMMENDATIONS\n")
 
     file.write(recommendations.to_string(index=False))
-
-    file.write("\n\nSEGMENT RISK COMPARISON\n")
-
-    file.write(risk_comparison.to_string(index=False))
 
 
 # =========================================================
 # COMPLETE
 # =========================================================
 
-print("\n" + "=" * 78)
-print("SEGMENT BUSINESS ANALYSIS COMPLETED")
-print("=" * 78)
+print("\n" + "=" * 80)
+print("LEAKAGE-SAFE SEGMENT BUSINESS ANALYSIS COMPLETED")
+print("=" * 80)
+
+
+print("\nFrozen segment mapping:")
+
+for (
+    cluster,
+    segment,
+) in segment_names.items():
+    print(f"Cluster {cluster}: {segment}")
+
+
+print("\nIndependent holdout validation:")
+
+print(holdout_validation)
+
+
+print("\nUpdated segmentation model:")
+
+print(SEGMENTATION_MODEL_PATH)
+
 
 print("\nLabeled dataset:")
+
 print(OUTPUT_DATA_PATH)
 
-print("\nTotal figures available:")
-print(len(list(FIGURES_DIR.glob("*.png"))))
 
 print("\nBusiness summary:")
+
 print(summary_path)

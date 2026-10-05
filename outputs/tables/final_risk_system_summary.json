@@ -1,0 +1,16 @@
+{
+    "model_type": "Sigmoid calibrated classifier",
+    "retention_threshold": 0.16000000000000003,
+    "default_threshold": 0.5,
+    "independent_holdout_customers": 1409,
+    "independent_holdout_roc_auc": 0.8407398796145599,
+    "independent_holdout_brier_score": 0.13874557232439855,
+    "independent_holdout_log_loss": 0.42171157255876707,
+    "independent_holdout_precision": 0.4451697127937337,
+    "independent_holdout_recall": 0.9117647058823529,
+    "independent_holdout_f1": 0.5982456140350877,
+    "independent_holdout_f2": 0.7537577365163572,
+    "full_cross_fitted_roc_auc": 0.8450473030253958,
+    "full_cross_fitted_brier_score": 0.13569863230808882,
+    "full_cross_fitted_log_loss": 0.417476942021453
+}

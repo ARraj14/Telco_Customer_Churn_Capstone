@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -8,10 +9,12 @@ from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.metrics import (
+    adjusted_rand_score,
     calinski_harabasz_score,
     davies_bouldin_score,
     silhouette_score,
 )
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import (
     OneHotEncoder,
     StandardScaler,
@@ -28,6 +31,10 @@ DATA_PATH = PROJECT_ROOT / "data" / "telco_churn_cleaned.csv"
 
 SEGMENTED_DATA_PATH = PROJECT_ROOT / "data" / "telco_churn_segmented.csv"
 
+SEGMENTATION_MODEL_PATH = (
+    PROJECT_ROOT / "models" / "customer_segmentation_pipeline.joblib"
+)
+
 FIGURES_DIR = PROJECT_ROOT / "outputs" / "figures"
 
 TABLES_DIR = PROJECT_ROOT / "outputs" / "tables"
@@ -42,6 +49,11 @@ TABLES_DIR.mkdir(
     exist_ok=True,
 )
 
+SEGMENTATION_MODEL_PATH.parent.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
 
 # =========================================================
 # LOAD DATA
@@ -49,9 +61,9 @@ TABLES_DIR.mkdir(
 
 df = pd.read_csv(DATA_PATH)
 
-print("=" * 78)
-print("TELCO CUSTOMER CHURN - CUSTOMER SEGMENTATION")
-print("=" * 78)
+print("=" * 80)
+print("TELCO CUSTOMER CHURN - LEAKAGE-SAFE CUSTOMER SEGMENTATION")
+print("=" * 80)
 
 print("\nDataset shape:")
 print(df.shape)
@@ -59,6 +71,10 @@ print(df.shape)
 
 # =========================================================
 # CLUSTERING FEATURES
+# =========================================================
+#
+# IMPORTANT:
+# Churn / ChurnValue are NOT clustering inputs.
 # =========================================================
 
 numeric_features = [
@@ -79,11 +95,63 @@ categorical_features = [
 
 cluster_features = numeric_features + categorical_features
 
-X = df[cluster_features].copy()
 
 print("\nClustering features:")
+
 for feature in cluster_features:
     print(f"- {feature}")
+
+
+# =========================================================
+# RECREATE TRAIN / HOLDOUT PARTITION
+# =========================================================
+#
+# The same random_state / stratification used by the
+# supervised model is reused here.
+#
+# Clustering itself does not use the churn target.
+# The split simply ensures that all clustering decisions
+# are made before looking at holdout customers.
+# =========================================================
+
+all_indices = df.index
+
+train_indices, test_indices = train_test_split(
+    all_indices,
+    test_size=0.20,
+    random_state=42,
+    stratify=df["ChurnValue"],
+)
+
+
+df["ModelSplit"] = "Training"
+
+df.loc[
+    test_indices,
+    "ModelSplit",
+] = "Holdout"
+
+
+X_train = df.loc[
+    train_indices,
+    cluster_features,
+].copy()
+
+
+X_holdout = df.loc[
+    test_indices,
+    cluster_features,
+].copy()
+
+
+X_full = df[cluster_features].copy()
+
+
+print("\nTraining customers used to build clusters:")
+print(len(X_train))
+
+print("\nHoldout customers:")
+print(len(X_holdout))
 
 
 # =========================================================
@@ -109,57 +177,70 @@ preprocessor = ColumnTransformer(
     remainder="drop",
 )
 
-X_processed = preprocessor.fit_transform(X)
 
-print("\nProcessed clustering shape:")
-print(X_processed.shape)
+# Fit preprocessing on TRAINING CUSTOMERS ONLY.
+
+X_train_processed = preprocessor.fit_transform(X_train)
+
+
+X_holdout_processed = preprocessor.transform(X_holdout)
+
+
+X_full_processed = preprocessor.transform(X_full)
+
+
+print("\nProcessed training shape:")
+print(X_train_processed.shape)
+
+print("\nProcessed holdout shape:")
+print(X_holdout_processed.shape)
 
 
 # =========================================================
-# EVALUATE K VALUES
+# EVALUATE K VALUES USING TRAINING DATA ONLY
 # =========================================================
 
 cluster_results = []
 
-for k in range(2, 9):
+
+for k in range(
+    2,
+    9,
+):
     model = KMeans(
         n_clusters=k,
         random_state=42,
         n_init=20,
     )
 
-    labels = model.fit_predict(X_processed)
-
-    silhouette = silhouette_score(
-        X_processed,
-        labels,
-    )
-
-    davies_bouldin = davies_bouldin_score(
-        X_processed,
-        labels,
-    )
-
-    calinski_harabasz = calinski_harabasz_score(
-        X_processed,
-        labels,
-    )
+    labels = model.fit_predict(X_train_processed)
 
     cluster_results.append(
         {
             "K": k,
             "Inertia": model.inertia_,
-            "Silhouette": silhouette,
-            "DaviesBouldin": davies_bouldin,
-            "CalinskiHarabasz": calinski_harabasz,
+            "Silhouette": silhouette_score(
+                X_train_processed,
+                labels,
+            ),
+            "DaviesBouldin": davies_bouldin_score(
+                X_train_processed,
+                labels,
+            ),
+            "CalinskiHarabasz": calinski_harabasz_score(
+                X_train_processed,
+                labels,
+            ),
         }
     )
 
 
 metrics_df = pd.DataFrame(cluster_results)
 
-print("\nClustering evaluation:")
+
+print("\nTraining-only clustering evaluation:")
 print(metrics_df.round(4))
+
 
 metrics_df.to_csv(
     TABLES_DIR / "clustering_k_evaluation.csv",
@@ -168,21 +249,35 @@ metrics_df.to_csv(
 
 
 # =========================================================
-# SELECT K
+# SELECT K USING TRAINING SILHOUETTE SCORE
 # =========================================================
 
 best_row = metrics_df.sort_values(
-    "Silhouette",
-    ascending=False,
+    [
+        "Silhouette",
+        "CalinskiHarabasz",
+    ],
+    ascending=[
+        False,
+        False,
+    ],
 ).iloc[0]
+
 
 best_k = int(best_row["K"])
 
-print("\nBest K by silhouette score:")
+
+print("\nSelected K:")
 print(best_k)
 
-print("\nBest silhouette score:")
+print("\nTraining silhouette score:")
 print(f"{best_row['Silhouette']:.4f}")
+
+print("\nTraining Davies-Bouldin score:")
+print(f"{best_row['DaviesBouldin']:.4f}")
+
+print("\nTraining Calinski-Harabasz score:")
+print(f"{best_row['CalinskiHarabasz']:.2f}")
 
 
 # =========================================================
@@ -191,6 +286,7 @@ print(f"{best_row['Silhouette']:.4f}")
 
 plt.figure(figsize=(8, 6))
 
+
 sns.lineplot(
     data=metrics_df,
     x="K",
@@ -198,7 +294,14 @@ sns.lineplot(
     marker="o",
 )
 
-plt.title("K-Means Elbow Method")
+
+plt.axvline(
+    best_k,
+    linestyle="--",
+)
+
+
+plt.title("Training-Only K-Means Elbow Method")
 
 plt.xlabel("Number of Clusters (K)")
 
@@ -216,10 +319,11 @@ plt.close()
 
 
 # =========================================================
-# FIGURE 25 - CLUSTER QUALITY
+# FIGURE 25 - SILHOUETTE SCORE
 # =========================================================
 
 plt.figure(figsize=(8, 6))
+
 
 sns.lineplot(
     data=metrics_df,
@@ -228,12 +332,14 @@ sns.lineplot(
     marker="o",
 )
 
+
 plt.axvline(
     best_k,
     linestyle="--",
 )
 
-plt.title("Silhouette Score by Number of Clusters")
+
+plt.title("Training Silhouette Score by Number of Clusters")
 
 plt.xlabel("Number of Clusters (K)")
 
@@ -253,6 +359,9 @@ plt.close()
 # =========================================================
 # FINAL K-MEANS MODEL
 # =========================================================
+#
+# Fit ONLY on training customers.
+# =========================================================
 
 kmeans = KMeans(
     n_clusters=best_k,
@@ -260,13 +369,94 @@ kmeans = KMeans(
     n_init=20,
 )
 
-cluster_labels = kmeans.fit_predict(X_processed)
 
-df["Cluster"] = cluster_labels
+training_cluster_labels = kmeans.fit_predict(X_train_processed)
+
+
+# Predict clusters for HOLDOUT customers using frozen model.
+
+holdout_cluster_labels = kmeans.predict(X_holdout_processed)
+
+
+# Predict clusters for all customers using same frozen model.
+
+full_cluster_labels = kmeans.predict(X_full_processed)
+
+
+df["Cluster"] = full_cluster_labels
+
+
+# =========================================================
+# CLUSTER STABILITY ANALYSIS
+# =========================================================
+#
+# Adjusted Rand Index is invariant to cluster label
+# permutations and measures whether clustering is stable
+# across random initializations.
+# =========================================================
+
+stability_records = []
+
+
+stability_seeds = [
+    7,
+    21,
+    42,
+    99,
+    123,
+]
+
+
+reference_labels = training_cluster_labels
+
+
+for seed in stability_seeds:
+    stability_model = KMeans(
+        n_clusters=best_k,
+        random_state=seed,
+        n_init=20,
+    )
+
+    stability_labels = stability_model.fit_predict(X_train_processed)
+
+    ari = adjusted_rand_score(
+        reference_labels,
+        stability_labels,
+    )
+
+    stability_records.append(
+        {
+            "RandomState": seed,
+            "AdjustedRandIndex": ari,
+        }
+    )
+
+
+stability_df = pd.DataFrame(stability_records)
+
+
+mean_stability_ari = stability_df["AdjustedRandIndex"].mean()
+
+
+print("\nCluster stability across random seeds:")
+print(stability_df.round(4))
+
+print("\nMean stability ARI:")
+print(f"{mean_stability_ari:.4f}")
+
+
+stability_df.to_csv(
+    TABLES_DIR / "cluster_stability_analysis.csv",
+    index=False,
+)
 
 
 # =========================================================
 # PCA
+# =========================================================
+#
+# PCA is fitted on training processed data and then
+# applied to the full dataset for visualization.
 # =========================================================
 
 pca = PCA(
@@ -274,17 +464,33 @@ pca = PCA(
     random_state=42,
 )
 
-pca_coordinates = pca.fit_transform(X_processed)
 
-df["PCA1"] = pca_coordinates[:, 0]
+pca.fit(X_train_processed)
 
-df["PCA2"] = pca_coordinates[:, 1]
+
+full_pca_coordinates = pca.transform(X_full_processed)
+
+
+df["PCA1"] = full_pca_coordinates[
+    :,
+    0,
+]
+
+
+df["PCA2"] = full_pca_coordinates[
+    :,
+    1,
+]
+
 
 explained_variance = pca.explained_variance_ratio_
 
+
 total_variance = explained_variance.sum()
 
-print("\nPCA explained variance:")
+
+print("\nTraining PCA explained variance:")
+
 print(f"PC1: {explained_variance[0] * 100:.2f}%")
 
 print(f"PC2: {explained_variance[1] * 100:.2f}%")
@@ -293,28 +499,38 @@ print(f"Total 2D variance: {total_variance * 100:.2f}%")
 
 
 # =========================================================
-# FIGURE 26 - PCA CLUSTER VISUALIZATION
+# FIGURE 26 - PCA VISUALIZATION
 # =========================================================
 
 plt.figure(figsize=(10, 7))
+
 
 sns.scatterplot(
     data=df,
     x="PCA1",
     y="PCA2",
     hue="Cluster",
+    style="ModelSplit",
     palette="tab10",
     alpha=0.65,
     s=35,
 )
 
-plt.title("Customer Segments Visualized with PCA")
+
+plt.title("Customer Segments from Training-Fitted K-Means")
 
 plt.xlabel("Principal Component 1")
 
 plt.ylabel("Principal Component 2")
 
-plt.legend(title="Cluster")
+plt.legend(
+    title="Cluster / Split",
+    bbox_to_anchor=(
+        1.02,
+        1,
+    ),
+    loc="upper left",
+)
 
 plt.tight_layout()
 
@@ -328,7 +544,7 @@ plt.close()
 
 
 # =========================================================
-# CLUSTER SIZES
+# CLUSTER SIZE TABLE
 # =========================================================
 
 cluster_sizes = (
@@ -339,10 +555,13 @@ cluster_sizes = (
     .reset_index(name="Customers")
 )
 
+
 cluster_sizes["Percentage"] = (cluster_sizes["Customers"] / len(df) * 100).round(2)
 
-print("\nCluster sizes:")
+
+print("\nFull-dataset cluster sizes:")
 print(cluster_sizes)
+
 
 cluster_sizes.to_csv(
     TABLES_DIR / "cluster_sizes.csv",
@@ -351,67 +570,108 @@ cluster_sizes.to_csv(
 
 
 # =========================================================
-# NUMERICAL CLUSTER PROFILE
+# PROFILE FUNCTION
 # =========================================================
 
-cluster_profile = (
-    df.groupby(
-        "Cluster",
-        observed=True,
+
+def create_cluster_profile(
+    data,
+):
+
+    profile = (
+        data.groupby(
+            "Cluster",
+            observed=True,
+        )
+        .agg(
+            Customers=(
+                "customerID",
+                "count",
+            ),
+            AvgTenure=(
+                "tenure",
+                "mean",
+            ),
+            MedianTenure=(
+                "tenure",
+                "median",
+            ),
+            AvgMonthlyCharges=(
+                "MonthlyCharges",
+                "mean",
+            ),
+            AvgTotalCharges=(
+                "TotalCharges",
+                "mean",
+            ),
+            AvgServices=(
+                "NumServices",
+                "mean",
+            ),
+            ChurnRate=(
+                "ChurnValue",
+                "mean",
+            ),
+            SeniorCitizenRate=(
+                "SeniorCitizen",
+                "mean",
+            ),
+            AutomaticPaymentRate=(
+                "AutomaticPayment",
+                "mean",
+            ),
+        )
+        .reset_index()
     )
-    .agg(
-        Customers=(
-            "customerID",
-            "count",
-        ),
-        AvgTenure=(
-            "tenure",
-            "mean",
-        ),
-        MedianTenure=(
-            "tenure",
-            "median",
-        ),
-        AvgMonthlyCharges=(
-            "MonthlyCharges",
-            "mean",
-        ),
-        AvgTotalCharges=(
-            "TotalCharges",
-            "mean",
-        ),
-        AvgServices=(
-            "NumServices",
-            "mean",
-        ),
-        ChurnRate=(
-            "ChurnValue",
-            "mean",
-        ),
-        SeniorCitizenRate=(
-            "SeniorCitizen",
-            "mean",
-        ),
-        AutomaticPaymentRate=(
-            "AutomaticPayment",
-            "mean",
-        ),
-    )
-    .reset_index()
+
+    percentage_columns = [
+        "ChurnRate",
+        "SeniorCitizenRate",
+        "AutomaticPaymentRate",
+    ]
+
+    for column in percentage_columns:
+        profile[column] *= 100
+
+    return profile.round(2)
+
+
+# =========================================================
+# TRAINING / HOLDOUT / FULL PROFILES
+# =========================================================
+
+training_profile = create_cluster_profile(df[df["ModelSplit"] == "Training"])
+
+
+holdout_profile = create_cluster_profile(df[df["ModelSplit"] == "Holdout"])
+
+
+full_profile = create_cluster_profile(df)
+
+
+print("\nTraining cluster profile:")
+print(training_profile)
+
+print("\nHoldout cluster profile:")
+print(holdout_profile)
+
+print("\nFull descriptive cluster profile:")
+print(full_profile)
+
+
+training_profile.to_csv(
+    TABLES_DIR / "cluster_training_profile.csv",
+    index=False,
 )
 
-cluster_profile["ChurnRate"] = cluster_profile["ChurnRate"] * 100
 
-cluster_profile["SeniorCitizenRate"] = cluster_profile["SeniorCitizenRate"] * 100
+holdout_profile.to_csv(
+    TABLES_DIR / "cluster_holdout_profile.csv",
+    index=False,
+)
 
-cluster_profile["AutomaticPaymentRate"] = cluster_profile["AutomaticPaymentRate"] * 100
 
-cluster_profile = cluster_profile.round(2)
-
-print("\nNumerical cluster profile:")
-print(cluster_profile)
-
-cluster_profile.to_csv(
+full_profile.to_csv(
     TABLES_DIR / "cluster_numerical_profile.csv",
     index=False,
 )
@@ -426,23 +686,25 @@ def dominant_category(
     group,
     column,
 ):
+
     counts = group[column].value_counts(normalize=True)
 
-    category = counts.index[0]
-
-    percentage = counts.iloc[0] * 100
-
     return (
-        category,
-        percentage,
+        counts.index[0],
+        counts.iloc[0] * 100,
     )
 
 
 # =========================================================
-# CATEGORY PROFILE
+# TRAINING CATEGORY PROFILE
+# =========================================================
+#
+# Business segment names will later be derived from this
+# TRAINING profile only.
 # =========================================================
 
-category_records = []
+training_df = df[df["ModelSplit"] == "Training"]
+
 
 profile_columns = [
     "Contract",
@@ -453,7 +715,14 @@ profile_columns = [
     "PaperlessBilling",
 ]
 
-for cluster, group in df.groupby(
+
+category_records = []
+
+
+for (
+    cluster,
+    group,
+) in training_df.groupby(
     "Cluster",
     observed=True,
 ):
@@ -462,7 +731,10 @@ for cluster, group in df.groupby(
     }
 
     for column in profile_columns:
-        category, percentage = dominant_category(
+        (
+            category,
+            percentage,
+        ) = dominant_category(
             group,
             column,
         )
@@ -479,9 +751,11 @@ for cluster, group in df.groupby(
 
 category_profile = pd.DataFrame(category_records)
 
-print("\nDominant categorical characteristics:")
+
+print("\nTraining dominant categorical characteristics:")
 
 print(category_profile)
+
 
 category_profile.to_csv(
     TABLES_DIR / "cluster_category_profile.csv",
@@ -490,36 +764,36 @@ category_profile.to_csv(
 
 
 # =========================================================
-# FIGURE 27 - CHURN RATE BY CLUSTER
+# FIGURE 27 - HOLDOUT CHURN BY CLUSTER
 # =========================================================
-
-cluster_churn = cluster_profile[
-    [
-        "Cluster",
-        "Customers",
-        "ChurnRate",
-    ]
-].copy()
+#
+# This is genuinely out-of-sample because the clustering
+# model was fitted before holdout customers were assigned.
+# =========================================================
 
 plt.figure(figsize=(8, 6))
 
+
 ax = sns.barplot(
-    data=cluster_churn,
+    data=holdout_profile,
     x="Cluster",
     y="ChurnRate",
 )
 
-plt.title("Observed Churn Rate by Customer Segment")
+
+plt.title("Holdout Churn Rate by Training-Defined Cluster")
 
 plt.xlabel("Cluster")
 
-plt.ylabel("Churn Rate (%)")
+plt.ylabel("Holdout Churn Rate (%)")
+
 
 for container in ax.containers:
     ax.bar_label(
         container,
         fmt="%.1f",
     )
+
 
 plt.tight_layout()
 
@@ -533,7 +807,7 @@ plt.close()
 
 
 # =========================================================
-# FIGURE 28 - STANDARDIZED PROFILE HEATMAP
+# FIGURE 28 - TRAINING CLUSTER PROFILE HEATMAP
 # =========================================================
 
 heatmap_columns = [
@@ -545,11 +819,15 @@ heatmap_columns = [
     "AutomaticPaymentRate",
 ]
 
-heatmap_data = cluster_profile.set_index("Cluster")[heatmap_columns]
+
+heatmap_data = training_profile.set_index("Cluster")[heatmap_columns]
+
 
 standardized_heatmap = (heatmap_data - heatmap_data.mean()) / heatmap_data.std(ddof=0)
 
+
 plt.figure(figsize=(11, 6))
+
 
 sns.heatmap(
     standardized_heatmap,
@@ -559,7 +837,8 @@ sns.heatmap(
     center=0,
 )
 
-plt.title("Standardized Customer Segment Profiles")
+
+plt.title("Training-Defined Standardized Cluster Profiles")
 
 plt.xlabel("Customer Characteristics")
 
@@ -577,51 +856,75 @@ plt.close()
 
 
 # =========================================================
-# CONTRACT DISTRIBUTION BY CLUSTER
+# DISTRIBUTION TABLES
 # =========================================================
 
 contract_distribution = (
     pd.crosstab(
-        df["Cluster"],
-        df["Contract"],
+        training_df["Cluster"],
+        training_df["Contract"],
         normalize="index",
     )
     * 100
 ).round(2)
+
+
+internet_distribution = (
+    pd.crosstab(
+        training_df["Cluster"],
+        training_df["InternetService"],
+        normalize="index",
+    )
+    * 100
+).round(2)
+
+
+payment_distribution = (
+    pd.crosstab(
+        training_df["Cluster"],
+        training_df["PaymentMethod"],
+        normalize="index",
+    )
+    * 100
+).round(2)
+
 
 contract_distribution.to_csv(TABLES_DIR / "cluster_contract_distribution.csv")
 
 
-# =========================================================
-# INTERNET DISTRIBUTION BY CLUSTER
-# =========================================================
-
-internet_distribution = (
-    pd.crosstab(
-        df["Cluster"],
-        df["InternetService"],
-        normalize="index",
-    )
-    * 100
-).round(2)
-
 internet_distribution.to_csv(TABLES_DIR / "cluster_internet_distribution.csv")
 
 
-# =========================================================
-# PAYMENT DISTRIBUTION BY CLUSTER
-# =========================================================
-
-payment_distribution = (
-    pd.crosstab(
-        df["Cluster"],
-        df["PaymentMethod"],
-        normalize="index",
-    )
-    * 100
-).round(2)
-
 payment_distribution.to_csv(TABLES_DIR / "cluster_payment_distribution.csv")
+
+
+# =========================================================
+# SAVE SEGMENTATION MODEL BUNDLE
+# =========================================================
+#
+# This allows a completely new customer to be transformed
+# and assigned a cluster later.
+# =========================================================
+
+segmentation_bundle = {
+    "preprocessor": preprocessor,
+    "kmeans": kmeans,
+    "pca": pca,
+    "numeric_features": numeric_features,
+    "categorical_features": categorical_features,
+    "cluster_features": cluster_features,
+    "selected_k": best_k,
+    "training_silhouette": float(best_row["Silhouette"]),
+    "training_davies_bouldin": float(best_row["DaviesBouldin"]),
+    "training_calinski_harabasz": float(best_row["CalinskiHarabasz"]),
+    "mean_stability_ari": float(mean_stability_ari),
+}
+
+
+joblib.dump(
+    segmentation_bundle,
+    SEGMENTATION_MODEL_PATH,
+)
 
 
 # =========================================================
@@ -640,6 +943,7 @@ df.to_csv(
 
 summary_path = TABLES_DIR / "clustering_summary.txt"
 
+
 with open(
     summary_path,
     "w",
@@ -647,29 +951,51 @@ with open(
 ) as file:
     file.write("TELCO CUSTOMER SEGMENTATION SUMMARY\n")
 
-    file.write("=" * 65 + "\n\n")
+    file.write("=" * 72 + "\n\n")
 
-    file.write(f"Customers analysed: {len(df)}\n")
+    file.write("METHODOLOGY\n")
+
+    file.write(
+        "K selection, preprocessing, PCA and K-Means fitting "
+        "were performed using training customers only.\n"
+    )
+
+    file.write(
+        "Holdout customers were assigned using the frozen "
+        "training-fitted clustering model.\n"
+    )
+
+    file.write("Churn / ChurnValue were not clustering inputs.\n\n")
+
+    file.write(f"Total customers: {len(df)}\n")
+
+    file.write(f"Training customers: {len(train_indices)}\n")
+
+    file.write(f"Holdout customers: {len(test_indices)}\n")
 
     file.write(f"Selected K: {best_k}\n")
 
-    file.write(f"Silhouette score: {best_row['Silhouette']:.4f}\n")
+    file.write(f"Training silhouette score: {best_row['Silhouette']:.4f}\n")
 
-    file.write(f"Davies-Bouldin score: {best_row['DaviesBouldin']:.4f}\n")
+    file.write(f"Training Davies-Bouldin score: {best_row['DaviesBouldin']:.4f}\n")
 
-    file.write(f"Calinski-Harabasz score: {best_row['CalinskiHarabasz']:.2f}\n")
+    file.write(
+        f"Training Calinski-Harabasz score: {best_row['CalinskiHarabasz']:.2f}\n"
+    )
+
+    file.write(f"Mean cluster stability ARI: {mean_stability_ari:.4f}\n")
 
     file.write(f"PCA 2D explained variance: {total_variance * 100:.2f}%\n\n")
 
-    file.write("Cluster sizes:\n")
+    file.write("TRAINING CLUSTER PROFILE\n")
 
-    file.write(cluster_sizes.to_string(index=False))
+    file.write(training_profile.to_string(index=False))
 
-    file.write("\n\nNumerical profiles:\n")
+    file.write("\n\nHOLDOUT CLUSTER PROFILE\n")
 
-    file.write(cluster_profile.to_string(index=False))
+    file.write(holdout_profile.to_string(index=False))
 
-    file.write("\n\nDominant categories:\n")
+    file.write("\n\nTRAINING DOMINANT CATEGORIES\n")
 
     file.write(category_profile.to_string(index=False))
 
@@ -678,18 +1004,21 @@ with open(
 # COMPLETE
 # =========================================================
 
-print("\n" + "=" * 78)
-print("CUSTOMER SEGMENTATION COMPLETED")
-print("=" * 78)
+print("\n" + "=" * 80)
+print("LEAKAGE-SAFE CUSTOMER SEGMENTATION COMPLETED")
+print("=" * 80)
 
 print("\nSelected K:")
 print(best_k)
 
-print("\nSegmented dataset saved to:")
+print("\nMean cluster stability ARI:")
+print(f"{mean_stability_ari:.4f}")
+
+print("\nSaved segmentation pipeline:")
+print(SEGMENTATION_MODEL_PATH)
+
+print("\nSegmented dataset:")
 print(SEGMENTED_DATA_PATH)
 
-print("\nTotal figures available:")
-print(len(list(FIGURES_DIR.glob("*.png"))))
-
-print("\nClustering summary:")
+print("\nSummary:")
 print(summary_path)

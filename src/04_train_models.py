@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -23,6 +24,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import (
     GridSearchCV,
     StratifiedKFold,
+    cross_val_predict,
     train_test_split,
 )
 from sklearn.pipeline import Pipeline
@@ -38,14 +40,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATA_PATH = PROJECT_ROOT / "data" / "telco_churn_cleaned.csv"
 
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
-TABLES_DIR = OUTPUT_DIR / "tables"
-FIGURES_DIR = OUTPUT_DIR / "figures"
+TABLES_DIR = PROJECT_ROOT / "outputs" / "tables"
+
+FIGURES_DIR = PROJECT_ROOT / "outputs" / "figures"
+
 MODELS_DIR = PROJECT_ROOT / "models"
 
-TABLES_DIR.mkdir(parents=True, exist_ok=True)
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+TABLES_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+FIGURES_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+MODELS_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 
 # =========================================================
@@ -54,9 +68,10 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 df = pd.read_csv(DATA_PATH)
 
-print("=" * 75)
+print("=" * 80)
 print("TELCO CUSTOMER CHURN - SUPERVISED MODELING")
-print("=" * 75)
+print("TRAINING-ONLY MODEL SELECTION + FINAL HOLDOUT EVALUATION")
+print("=" * 80)
 
 print("\nDataset shape:")
 print(df.shape)
@@ -99,6 +114,7 @@ categorical_features = [
 feature_columns = numeric_features + categorical_features
 
 X = df[feature_columns].copy()
+
 y = df[target].copy()
 
 
@@ -113,7 +129,17 @@ print(y.value_counts(normalize=True).mul(100).round(2))
 
 
 # =========================================================
-# TRAIN / TEST SPLIT
+# TRAIN / FINAL TEST SPLIT
+# =========================================================
+#
+# IMPORTANT:
+# The holdout test set is created once here.
+#
+# Model-family selection and hyperparameter selection are
+# performed ONLY using X_train / y_train.
+#
+# X_test / y_test are used only after the winning model
+# has already been selected.
 # =========================================================
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -124,16 +150,17 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y,
 )
 
-print("\nTrain shape:")
+
+print("\nTraining shape:")
 print(X_train.shape)
 
-print("\nTest shape:")
+print("\nFinal holdout test shape:")
 print(X_test.shape)
 
 print("\nTraining churn rate:")
 print(f"{y_train.mean() * 100:.2f}%")
 
-print("\nTesting churn rate:")
+print("\nHoldout churn rate:")
 print(f"{y_test.mean() * 100:.2f}%")
 
 
@@ -154,6 +181,7 @@ numeric_pipeline = Pipeline(
     ]
 )
 
+
 categorical_pipeline = Pipeline(
     steps=[
         (
@@ -166,6 +194,7 @@ categorical_pipeline = Pipeline(
         ),
     ]
 )
+
 
 preprocessor = ColumnTransformer(
     transformers=[
@@ -261,19 +290,27 @@ models = {
 
 
 # =========================================================
-# TRAIN AND TUNE MODELS
+# TRAINING-ONLY MODEL COMPARISON
 # =========================================================
 
-results = []
+comparison_records = []
+
 trained_models = {}
+
+oof_probabilities_by_model = {}
+
+oof_predictions_by_model = {}
+
+best_params_by_model = {}
+
 
 for model_name, (
     classifier,
     param_grid,
 ) in models.items():
-    print("\n" + "=" * 75)
-    print(f"TRAINING: {model_name}")
-    print("=" * 75)
+    print("\n" + "=" * 80)
+    print(f"TRAINING / TUNING: {model_name}")
+    print("=" * 80)
 
     pipeline = Pipeline(
         steps=[
@@ -287,6 +324,11 @@ for model_name, (
             ),
         ]
     )
+
+    # -----------------------------------------------------
+    # Hyperparameter tuning:
+    # TRAINING DATA ONLY
+    # -----------------------------------------------------
 
     search = GridSearchCV(
         estimator=pipeline,
@@ -307,222 +349,176 @@ for model_name, (
 
     trained_models[model_name] = best_model
 
-    probabilities = best_model.predict_proba(X_test)[:, 1]
+    best_params_by_model[model_name] = search.best_params_
 
-    predictions = best_model.predict(X_test)
+    # -----------------------------------------------------
+    # Training out-of-fold predictions
+    #
+    # Used for diagnostic comparison only.
+    # The final holdout test set is NOT touched here.
+    # -----------------------------------------------------
 
-    metrics = {
+    oof_probabilities = cross_val_predict(
+        clone(best_model),
+        X_train,
+        y_train,
+        cv=cv,
+        method="predict_proba",
+        n_jobs=-1,
+    )[:, 1]
+
+    oof_predictions = (oof_probabilities >= 0.50).astype(int)
+
+    oof_probabilities_by_model[model_name] = oof_probabilities
+
+    oof_predictions_by_model[model_name] = oof_predictions
+
+    grid_cv_auc = float(search.best_score_)
+
+    oof_auc = roc_auc_score(
+        y_train,
+        oof_probabilities,
+    )
+
+    record = {
         "Model": model_name,
-        "CV_ROC_AUC": (search.best_score_),
-        "Test_ROC_AUC": (
-            roc_auc_score(
-                y_test,
-                probabilities,
-            )
+        "GridSearch_CV_ROC_AUC": grid_cv_auc,
+        "OOF_ROC_AUC": oof_auc,
+        "OOF_Accuracy": accuracy_score(
+            y_train,
+            oof_predictions,
         ),
-        "Accuracy": (
-            accuracy_score(
-                y_test,
-                predictions,
-            )
+        "OOF_Balanced_Accuracy": balanced_accuracy_score(
+            y_train,
+            oof_predictions,
         ),
-        "Balanced_Accuracy": (
-            balanced_accuracy_score(
-                y_test,
-                predictions,
-            )
+        "OOF_Precision": precision_score(
+            y_train,
+            oof_predictions,
+            zero_division=0,
         ),
-        "Precision": (
-            precision_score(
-                y_test,
-                predictions,
-                zero_division=0,
-            )
+        "OOF_Recall": recall_score(
+            y_train,
+            oof_predictions,
+            zero_division=0,
         ),
-        "Recall": (
-            recall_score(
-                y_test,
-                predictions,
-                zero_division=0,
-            )
+        "OOF_F1": f1_score(
+            y_train,
+            oof_predictions,
+            zero_division=0,
         ),
-        "F1": (
-            f1_score(
-                y_test,
-                predictions,
-                zero_division=0,
-            )
+        "BestParameters": json.dumps(
+            search.best_params_,
+            sort_keys=True,
         ),
     }
 
-    results.append(metrics)
+    comparison_records.append(record)
 
     print("\nBest parameters:")
     print(search.best_params_)
 
-    print("\nBest CV ROC-AUC:")
-    print(f"{search.best_score_:.4f}")
+    print("\nGrid-search CV ROC-AUC:")
+    print(f"{grid_cv_auc:.4f}")
 
-    print("\nTest metrics:")
+    print("\nTraining OOF ROC-AUC:")
+    print(f"{oof_auc:.4f}")
 
-    for metric, value in metrics.items():
-        if metric != "Model":
-            print(f"{metric}: {value:.4f}")
+    print("\nTraining OOF metrics:")
+    print(f"Accuracy: {record['OOF_Accuracy']:.4f}")
+
+    print(f"Balanced Accuracy: {record['OOF_Balanced_Accuracy']:.4f}")
+
+    print(f"Precision: {record['OOF_Precision']:.4f}")
+
+    print(f"Recall: {record['OOF_Recall']:.4f}")
+
+    print(f"F1: {record['OOF_F1']:.4f}")
 
 
 # =========================================================
-# MODEL COMPARISON
+# MODEL SELECTION
+# =========================================================
+#
+# CRITICAL METHODOLOGY:
+#
+# The winning model is selected ONLY from training CV.
+#
+# No holdout-test metric is involved in this decision.
 # =========================================================
 
-results_df = pd.DataFrame(results)
+comparison_df = pd.DataFrame(comparison_records)
 
-results_df = results_df.sort_values(
-    "Test_ROC_AUC",
+
+comparison_df = comparison_df.sort_values(
+    [
+        "GridSearch_CV_ROC_AUC",
+        "OOF_ROC_AUC",
+    ],
     ascending=False,
 ).reset_index(drop=True)
 
-print("\n" + "=" * 75)
-print("MODEL COMPARISON")
-print("=" * 75)
 
-print(results_df.round(4))
+best_model_name = comparison_df.loc[
+    0,
+    "Model",
+]
 
-results_df.to_csv(
+
+comparison_df["Selected"] = comparison_df["Model"] == best_model_name
+
+
+print("\n" + "=" * 80)
+print("TRAINING-ONLY MODEL COMPARISON")
+print("=" * 80)
+
+print(comparison_df.round(4))
+
+
+comparison_df.to_csv(
     TABLES_DIR / "model_comparison.csv",
     index=False,
 )
 
 
-# =========================================================
-# SELECT BEST MODEL
-# =========================================================
+print("\nSelected model based ONLY on training CV:")
+print(best_model_name)
 
-best_model_name = results_df.loc[
-    0,
-    "Model",
-]
+print("\nSelection criterion:")
+print("Highest GridSearch 5-fold CV ROC-AUC")
+
 
 best_model = trained_models[best_model_name]
 
-print("\nSelected best model:")
-print(best_model_name)
-
 
 # =========================================================
-# FINAL PREDICTIONS
-# =========================================================
-
-best_probabilities = best_model.predict_proba(X_test)[:, 1]
-
-best_predictions = best_model.predict(X_test)
-
-
-prediction_output = pd.DataFrame(
-    {
-        "Actual": y_test.values,
-        "Predicted": best_predictions,
-        "ChurnProbability": (best_probabilities),
-    },
-    index=y_test.index,
-)
-
-prediction_output.insert(
-    0,
-    "customerID",
-    df.loc[
-        y_test.index,
-        "customerID",
-    ],
-)
-
-prediction_output = prediction_output.sort_values(
-    "ChurnProbability",
-    ascending=False,
-)
-
-prediction_output.to_csv(
-    TABLES_DIR / "test_predictions.csv",
-    index=False,
-)
-
-
-# =========================================================
-# CONFUSION MATRIX
-# =========================================================
-
-cm = confusion_matrix(
-    y_test,
-    best_predictions,
-)
-
-cm_df = pd.DataFrame(
-    cm,
-    index=[
-        "Actual No Churn",
-        "Actual Churn",
-    ],
-    columns=[
-        "Predicted No Churn",
-        "Predicted Churn",
-    ],
-)
-
-print("\nConfusion matrix:")
-print(cm_df)
-
-cm_df.to_csv(TABLES_DIR / "best_model_confusion_matrix.csv")
-
-
-plt.figure(figsize=(7, 6))
-
-sns.heatmap(
-    cm_df,
-    annot=True,
-    fmt="d",
-    cmap="Blues",
-)
-
-plt.title(f"Confusion Matrix - {best_model_name}")
-
-plt.ylabel("Actual")
-plt.xlabel("Predicted")
-
-plt.tight_layout()
-
-plt.savefig(
-    FIGURES_DIR / "16_best_model_confusion_matrix.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# =========================================================
-# ROC CURVES FOR ALL MODELS
+# FIGURE 17
+# TRAINING OOF ROC CURVES
 # =========================================================
 
 plt.figure(figsize=(8, 7))
 
 roc_table = []
 
-for model_name, model in trained_models.items():
-    probability = model.predict_proba(X_test)[:, 1]
 
+for (
+    model_name,
+    probabilities,
+) in oof_probabilities_by_model.items():
     fpr, tpr, thresholds = roc_curve(
-        y_test,
-        probability,
+        y_train,
+        probabilities,
     )
 
     auc = roc_auc_score(
-        y_test,
-        probability,
+        y_train,
+        probabilities,
     )
 
     plt.plot(
         fpr,
         tpr,
-        label=(f"{model_name} (AUC={auc:.3f})"),
+        label=(f"{model_name} (OOF AUC={auc:.3f})"),
     )
 
     for (
@@ -539,7 +535,7 @@ for model_name, model in trained_models.items():
                 "Model": model_name,
                 "FPR": current_fpr,
                 "TPR": current_tpr,
-                "Threshold": (current_threshold),
+                "Threshold": current_threshold,
             }
         )
 
@@ -551,7 +547,7 @@ plt.plot(
     label="Random Classifier",
 )
 
-plt.title("ROC Curves - Churn Prediction Models")
+plt.title("Training Out-of-Fold ROC Curves")
 
 plt.xlabel("False Positive Rate")
 
@@ -577,23 +573,36 @@ pd.DataFrame(roc_table).to_csv(
 
 
 # =========================================================
-# MODEL COMPARISON FIGURE
+# FIGURE 18
+# TRAINING-ONLY MODEL COMPARISON
 # =========================================================
 
-comparison_long = results_df[
+comparison_long = comparison_df[
     [
         "Model",
-        "Test_ROC_AUC",
-        "Balanced_Accuracy",
-        "Precision",
-        "Recall",
-        "F1",
+        "OOF_ROC_AUC",
+        "OOF_Balanced_Accuracy",
+        "OOF_Precision",
+        "OOF_Recall",
+        "OOF_F1",
     ]
 ].melt(
     id_vars="Model",
     var_name="Metric",
     value_name="Score",
 )
+
+
+metric_name_mapping = {
+    "OOF_ROC_AUC": "ROC-AUC",
+    "OOF_Balanced_Accuracy": "Balanced Accuracy",
+    "OOF_Precision": "Precision",
+    "OOF_Recall": "Recall",
+    "OOF_F1": "F1",
+}
+
+
+comparison_long["Metric"] = comparison_long["Metric"].map(metric_name_mapping)
 
 
 plt.figure(figsize=(12, 7))
@@ -610,7 +619,7 @@ plt.ylim(
     1,
 )
 
-plt.title("Predictive Model Performance Comparison")
+plt.title("Training Out-of-Fold Model Performance Comparison")
 
 plt.xlabel("Evaluation Metric")
 
@@ -635,12 +644,178 @@ plt.close()
 
 
 # =========================================================
-# FEATURE IMPORTANCE / COEFFICIENT ANALYSIS
+# FINAL HOLDOUT TEST
+# =========================================================
+#
+# The winning model has already been fixed.
+# This is the FIRST use of the test set for model
+# performance evaluation.
+# =========================================================
+
+print("\n" + "=" * 80)
+print("FINAL HOLDOUT TEST EVALUATION")
+print("=" * 80)
+
+print("\nLocked model:")
+
+print(best_model_name)
+
+
+test_probabilities = best_model.predict_proba(X_test)[:, 1]
+
+
+test_predictions = (test_probabilities >= 0.50).astype(int)
+
+
+test_metrics = {
+    "Model": best_model_name,
+    "Test_ROC_AUC": roc_auc_score(
+        y_test,
+        test_probabilities,
+    ),
+    "Accuracy": accuracy_score(
+        y_test,
+        test_predictions,
+    ),
+    "Balanced_Accuracy": balanced_accuracy_score(
+        y_test,
+        test_predictions,
+    ),
+    "Precision": precision_score(
+        y_test,
+        test_predictions,
+        zero_division=0,
+    ),
+    "Recall": recall_score(
+        y_test,
+        test_predictions,
+        zero_division=0,
+    ),
+    "F1": f1_score(
+        y_test,
+        test_predictions,
+        zero_division=0,
+    ),
+}
+
+
+print("\nFinal holdout metrics:")
+
+for key, value in test_metrics.items():
+    if key == "Model":
+        print(f"{key}: {value}")
+
+    else:
+        print(f"{key}: {value:.4f}")
+
+
+pd.DataFrame([test_metrics]).to_csv(
+    TABLES_DIR / "selected_model_test_metrics.csv",
+    index=False,
+)
+
+
+# =========================================================
+# TEST PREDICTIONS
+# =========================================================
+
+prediction_output = pd.DataFrame(
+    {
+        "Actual": y_test.values,
+        "Predicted": test_predictions,
+        "ChurnProbability": test_probabilities,
+    },
+    index=y_test.index,
+)
+
+
+prediction_output.insert(
+    0,
+    "customerID",
+    df.loc[
+        y_test.index,
+        "customerID",
+    ],
+)
+
+
+prediction_output = prediction_output.sort_values(
+    "ChurnProbability",
+    ascending=False,
+)
+
+
+prediction_output.to_csv(
+    TABLES_DIR / "test_predictions.csv",
+    index=False,
+)
+
+
+# =========================================================
+# CONFUSION MATRIX
+# =========================================================
+
+cm = confusion_matrix(
+    y_test,
+    test_predictions,
+)
+
+
+cm_df = pd.DataFrame(
+    cm,
+    index=[
+        "Actual No Churn",
+        "Actual Churn",
+    ],
+    columns=[
+        "Predicted No Churn",
+        "Predicted Churn",
+    ],
+)
+
+
+print("\nFinal holdout confusion matrix:")
+print(cm_df)
+
+
+cm_df.to_csv(TABLES_DIR / "best_model_confusion_matrix.csv")
+
+
+plt.figure(figsize=(7, 6))
+
+sns.heatmap(
+    cm_df,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+)
+
+plt.title(f"Final Holdout Confusion Matrix - {best_model_name}")
+
+plt.ylabel("Actual")
+
+plt.xlabel("Predicted")
+
+plt.tight_layout()
+
+plt.savefig(
+    FIGURES_DIR / "16_best_model_confusion_matrix.png",
+    dpi=300,
+    bbox_inches="tight",
+)
+
+plt.close()
+
+
+# =========================================================
+# FEATURE EFFECT / IMPORTANCE
 # =========================================================
 
 fitted_preprocessor = best_model.named_steps["preprocessor"]
 
+
 feature_names = fitted_preprocessor.get_feature_names_out()
+
 
 classifier = best_model.named_steps["model"]
 
@@ -652,7 +827,7 @@ if hasattr(
     importance_df = pd.DataFrame(
         {
             "Feature": feature_names,
-            "Effect": (classifier.feature_importances_),
+            "Effect": classifier.feature_importances_,
         }
     )
 
@@ -666,7 +841,7 @@ elif hasattr(
     importance_df = pd.DataFrame(
         {
             "Feature": feature_names,
-            "Effect": (classifier.coef_[0]),
+            "Effect": classifier.coef_[0],
         }
     )
 
@@ -701,9 +876,18 @@ if importance_df is not None:
         y="Feature",
     )
 
-    plt.title(f"Top Predictive Features - {best_model_name}")
+    if hasattr(
+        classifier,
+        "coef_",
+    ):
+        plt.title(f"Top Absolute Model Coefficients - {best_model_name}")
 
-    plt.xlabel("Feature Importance")
+        plt.xlabel("Absolute Standardized Coefficient")
+
+    else:
+        plt.title(f"Top Predictive Features - {best_model_name}")
+
+        plt.xlabel("Feature Importance")
 
     plt.ylabel("Feature")
 
@@ -719,10 +903,11 @@ if importance_df is not None:
 
 
 # =========================================================
-# SAVE BEST MODEL
+# SAVE LOCKED MODEL
 # =========================================================
 
 model_path = MODELS_DIR / "best_churn_model.joblib"
+
 
 joblib.dump(
     best_model,
@@ -734,7 +919,8 @@ joblib.dump(
 # MODEL SUMMARY JSON
 # =========================================================
 
-best_row = results_df.iloc[0]
+selected_training_row = comparison_df[comparison_df["Model"] == best_model_name].iloc[0]
+
 
 summary = {
     "dataset_rows": int(len(df)),
@@ -742,14 +928,24 @@ summary = {
     "testing_rows": int(len(X_test)),
     "training_churn_rate": float(y_train.mean()),
     "testing_churn_rate": float(y_test.mean()),
-    "selected_model": (best_model_name),
-    "test_roc_auc": float(best_row["Test_ROC_AUC"]),
-    "accuracy": float(best_row["Accuracy"]),
-    "balanced_accuracy": float(best_row["Balanced_Accuracy"]),
-    "precision": float(best_row["Precision"]),
-    "recall": float(best_row["Recall"]),
-    "f1": float(best_row["F1"]),
+    "selection_method": (
+        "Model family and hyperparameters selected "
+        "using training-only 5-fold stratified "
+        "cross-validation."
+    ),
+    "selection_metric": "GridSearch_CV_ROC_AUC",
+    "selected_model": best_model_name,
+    "selected_model_cv_roc_auc": float(selected_training_row["GridSearch_CV_ROC_AUC"]),
+    "selected_model_oof_roc_auc": float(selected_training_row["OOF_ROC_AUC"]),
+    "best_parameters": best_params_by_model[best_model_name],
+    "test_roc_auc": float(test_metrics["Test_ROC_AUC"]),
+    "accuracy": float(test_metrics["Accuracy"]),
+    "balanced_accuracy": float(test_metrics["Balanced_Accuracy"]),
+    "precision": float(test_metrics["Precision"]),
+    "recall": float(test_metrics["Recall"]),
+    "f1": float(test_metrics["F1"]),
 }
+
 
 with open(
     TABLES_DIR / "model_summary.json",
@@ -767,18 +963,29 @@ with open(
 # FINAL OUTPUT
 # =========================================================
 
-print("\n" + "=" * 75)
+print("\n" + "=" * 80)
 print("SUPERVISED MODELING COMPLETED")
-print("=" * 75)
+print("=" * 80)
 
-print("\nBest model:")
+print("\nSelection was based ONLY on training CV.")
+
+print("\nSelected model:")
 print(best_model_name)
 
-print("\nFinal metrics:")
-print(results_df.iloc[0])
+print("\nSelected model CV ROC-AUC:")
+print(f"{summary['selected_model_cv_roc_auc']:.4f}")
+
+print("\nFinal holdout ROC-AUC:")
+print(f"{summary['test_roc_auc']:.4f}")
+
+print("\nFinal holdout recall:")
+print(f"{summary['recall']:.4f}")
 
 print("\nSaved model:")
 print(model_path)
 
-print("\nFigures now available:")
-print(len(list(FIGURES_DIR.glob("*.png"))))
+print("\nModel comparison:")
+print(TABLES_DIR / "model_comparison.csv")
+
+print("\nFinal test metrics:")
+print(TABLES_DIR / "selected_model_test_metrics.csv")
