@@ -741,7 +741,7 @@ wheels = [
 [[package]]
 name = "telco-customer-churn-capstone"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "joblib" },
     { name = "matplotlib" },

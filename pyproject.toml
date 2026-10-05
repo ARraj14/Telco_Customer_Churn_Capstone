@@ -1,7 +1,7 @@
 [project]
 name = "telco-customer-churn-capstone"
 version = "0.1.0"
-description = "Add your description here"
+description = "End-to-end Telco customer churn analysis, prediction, segmentation, and retention prioritization."
 readme = "README.md"
 authors = [
     { name = "Rishii", email = "arishiraj1415@gmail.com" }
@@ -15,10 +15,3 @@ dependencies = [
     "scikit-learn>=1.9.1",
     "seaborn>=0.13.2",
 ]
-
-[project.scripts]
-telco-customer-churn-capstone = "telco_customer_churn_capstone:main"
-
-[build-system]
-requires = ["uv_build>=0.12.13,<0.13.0"]
-build-backend = "uv_build"
